@@ -1,70 +1,125 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
+// ── Standard Webhooks signature verification ────────────────────────
+// Whop follows the Standard Webhooks spec:
+//   Headers: webhook-id, webhook-signature, webhook-timestamp
+//   Signature: HMAC-SHA256(secret, "${msg_id}.${timestamp}.${body}")
+//   Format: "v1,<base64>"
+
 const encoder = new TextEncoder();
 
-async function hmacHex(secret: string, data: string): Promise<string> {
-  const key = await crypto.subtle.importKey(
+async function verifyWebhookSignature(
+  body: string,
+  headers: {
+    id: string | null;
+    signature: string | null;
+    timestamp: string | null;
+  }
+): Promise<boolean> {
+  const secret =
+    (await prisma.appSettings
+      .findUnique({ where: { id: "default" } })
+      .then((s) => s?.webhookSecret)) || process.env.WHOP_WEBHOOK_SECRET;
+
+  if (!secret) {
+    console.warn(
+      "No webhook secret configured — skipping signature verification"
+    );
+    return true;
+  }
+
+  const { id, signature, timestamp } = headers;
+  if (!id || !signature || !timestamp) {
+    console.error("Missing webhook headers:", { id: !!id, signature: !!signature, timestamp: !!timestamp });
+    return false;
+  }
+
+  // Reject old timestamps (tolerance: 5 minutes)
+  const ts = parseInt(timestamp);
+  if (isNaN(ts) || Math.abs(Date.now() / 1000 - ts) > 300) {
+    console.error("Webhook timestamp out of tolerance");
+    return false;
+  }
+
+  // The signed content is: "${msg_id}.${timestamp}.${body}"
+  const signedContent = `${id}.${timestamp}.${body}`;
+
+  // The secret from Whop is the raw key string.
+  // Import as HMAC-SHA256 key.
+  const keyData = encoder.encode(secret);
+  const cryptoKey = await crypto.subtle.importKey(
     "raw",
-    encoder.encode(secret),
+    keyData,
     { name: "HMAC", hash: "SHA-256" },
     false,
     ["sign"]
   );
-  const sig = await crypto.subtle.sign("HMAC", key, encoder.encode(data));
-  return Array.from(new Uint8Array(sig))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-}
 
-async function verifyWebhookSignature(
-  body: string,
-  signature: string | null
-): Promise<boolean> {
-  if (!signature) return false;
+  const sig = await crypto.subtle.sign(
+    "HMAC",
+    cryptoKey,
+    encoder.encode(signedContent)
+  );
 
-  const settings = await prisma.appSettings.findUnique({
-    where: { id: "default" },
-  });
+  const expectedBase64 = btoa(
+    String.fromCharCode(...new Uint8Array(sig))
+  );
 
-  const secret = settings?.webhookSecret || process.env.WHOP_WEBHOOK_SECRET;
-  if (!secret) {
-    // If no secret is configured, log a warning but allow (for initial setup)
-    console.warn("No webhook secret configured — skipping signature verification");
-    return true;
+  // The webhook-signature header can contain multiple signatures:
+  // "v1,<base64> v1,<base64>"
+  // We check if any match.
+  const signatures = signature.split(" ");
+  for (const s of signatures) {
+    const parts = s.split(",");
+    if (parts.length < 2) continue;
+    const version = parts[0];
+    const sigValue = parts.slice(1).join(","); // base64 can't have commas, but be safe
+
+    if (version !== "v1") continue;
+
+    // Constant-time comparison
+    if (sigValue.length !== expectedBase64.length) continue;
+    let mismatch = 0;
+    for (let i = 0; i < sigValue.length; i++) {
+      mismatch |= sigValue.charCodeAt(i) ^ expectedBase64.charCodeAt(i);
+    }
+    if (mismatch === 0) return true;
   }
 
-  const expected = await hmacHex(secret, body);
-
-  // Constant-time comparison
-  if (signature.length !== expected.length) return false;
-  let mismatch = 0;
-  for (let i = 0; i < signature.length; i++) {
-    mismatch |= signature.charCodeAt(i) ^ expected.charCodeAt(i);
-  }
-  return mismatch === 0;
+  console.error("Webhook signature mismatch");
+  return false;
 }
+
+// ── Webhook handler ─────────────────────────────────────────────────
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.text();
 
-    // Verify webhook signature
-    const signature = request.headers.get("x-whop-signature") ||
-                      request.headers.get("whop-signature");
-    const isValid = await verifyWebhookSignature(body, signature);
+    // Standard Webhooks headers
+    const webhookId = request.headers.get("webhook-id");
+    const webhookSignature = request.headers.get("webhook-signature");
+    const webhookTimestamp = request.headers.get("webhook-timestamp");
+
+    const isValid = await verifyWebhookSignature(body, {
+      id: webhookId,
+      signature: webhookSignature,
+      timestamp: webhookTimestamp,
+    });
+
     if (!isValid) {
       console.error("Invalid webhook signature");
       return NextResponse.json(
-        { status: "error", message: "Invalid signature" },
+        { status: "error", message: "Invalid webhook signature" },
         { status: 401 }
       );
     }
 
     const payload = JSON.parse(body);
 
-    // Idempotency check
-    const messageId = payload.id;
+    // Use webhook-id header for idempotency (more reliable than payload.id)
+    const messageId = webhookId || payload.id;
     if (!messageId) {
       return NextResponse.json(
         { status: "error", message: "Missing message ID" },
@@ -130,6 +185,8 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+// ── Event handlers ──────────────────────────────────────────────────
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function handlePaymentSucceeded(data: any) {
