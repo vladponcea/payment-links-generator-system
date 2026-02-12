@@ -18,6 +18,13 @@ export async function POST() {
     const webhook = await (whopClient.webhooks as any).create({
       url: webhookUrl,
       resource_id: COMPANY_ID,
+      events: [
+        "payment.succeeded",
+        "payment.failed",
+        "payment.pending",
+        "refund.created",
+        "refund.updated",
+      ],
     });
 
     // Store webhook info
