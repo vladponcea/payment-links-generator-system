@@ -17,15 +17,17 @@ import type { CloserRevenue } from "@/lib/types";
 interface CloserBarChartProps {
   from: string;
   to: string;
+  closerId?: string;
 }
 
-export function CloserBarChart({ from, to }: CloserBarChartProps) {
+export function CloserBarChart({ from, to, closerId }: CloserBarChartProps) {
   const [data, setData] = useState<CloserRevenue[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     setLoading(true);
     const params = new URLSearchParams({ from, to });
+    if (closerId) params.set("closerId", closerId);
     fetch(`/api/analytics/by-closer?${params}`)
       .then((res) => res.json())
       .then((result) => {
@@ -33,7 +35,7 @@ export function CloserBarChart({ from, to }: CloserBarChartProps) {
       })
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [from, to]);
+  }, [from, to, closerId]);
 
   return (
     <Card>

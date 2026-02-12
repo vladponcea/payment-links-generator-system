@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getUserFromRequest } from "@/lib/auth";
 
 export async function GET(request: NextRequest) {
   try {
+    const user = getUserFromRequest(request);
     const searchParams = request.nextUrl.searchParams;
     const closerId = searchParams.get("closerId");
     const status = searchParams.get("status");
@@ -14,7 +16,13 @@ export async function GET(request: NextRequest) {
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const where: any = {};
-    if (closerId) where.closerId = closerId;
+
+    // Closers can only see their own payments
+    if (user?.role === "closer") {
+      where.closerId = user.userId;
+    } else if (closerId) {
+      where.closerId = closerId;
+    }
     if (status) where.status = status;
     if (search) {
       where.OR = [

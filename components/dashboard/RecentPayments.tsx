@@ -25,15 +25,17 @@ interface RecentPayment {
 interface RecentPaymentsProps {
   from: string;
   to: string;
+  closerId?: string;
 }
 
-export function RecentPayments({ from, to }: RecentPaymentsProps) {
+export function RecentPayments({ from, to, closerId }: RecentPaymentsProps) {
   const [payments, setPayments] = useState<RecentPayment[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     setLoading(true);
     const params = new URLSearchParams({ limit: "10", from, to });
+    if (closerId) params.set("closerId", closerId);
     fetch(`/api/payments?${params}`)
       .then((res) => res.json())
       .then((data) => {
@@ -41,7 +43,7 @@ export function RecentPayments({ from, to }: RecentPaymentsProps) {
       })
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [from, to]);
+  }, [from, to, closerId]);
 
   return (
     <Card className="col-span-full">

@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getUserFromRequest } from "@/lib/auth";
 
 export async function GET(request: NextRequest) {
   try {
+    const user = getUserFromRequest(request);
     const searchParams = request.nextUrl.searchParams;
     const from = searchParams.get("from");
     const to = searchParams.get("to");
@@ -30,10 +32,20 @@ export async function GET(request: NextRequest) {
       endDate = new Date();
     }
 
+    // Closer filter: closers only see their own data; admins can filter by closerId param
+    const closerIdParam = searchParams.get("closerId");
+    const closerFilter =
+      user?.role === "closer"
+        ? { closerId: user.userId }
+        : closerIdParam
+        ? { closerId: closerIdParam }
+        : {};
+
     const payments = await prisma.payment.findMany({
       where: {
         status: "succeeded",
         paidAt: { gte: startDate, lte: endDate },
+        ...closerFilter,
       },
       select: {
         amount: true,

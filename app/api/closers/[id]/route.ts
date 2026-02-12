@@ -1,15 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
+// GET /api/closers/[id] — Get a closer (user with role "closer") by ID
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await params;
-    const closer = await prisma.closer.findUnique({
-      where: { id },
-      include: {
+    const closer = await prisma.user.findUnique({
+      where: { id, role: "closer" },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        phone: true,
+        avatarUrl: true,
+        commissionType: true,
+        commissionValue: true,
+        isActive: true,
+        createdAt: true,
         payments: {
           where: { status: "succeeded" },
           orderBy: { paidAt: "desc" },
@@ -53,60 +63,6 @@ export async function GET(
     console.error("Failed to fetch closer:", error);
     return NextResponse.json(
       { success: false, error: "Failed to fetch closer" },
-      { status: 500 }
-    );
-  }
-}
-
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { id } = await params;
-    const body = await request.json();
-    const { name, email, phone, commissionType, commissionValue, isActive } = body;
-
-    const closer = await prisma.closer.update({
-      where: { id },
-      data: {
-        ...(name !== undefined && { name }),
-        ...(email !== undefined && { email }),
-        ...(phone !== undefined && { phone }),
-        ...(commissionType !== undefined && { commissionType }),
-        ...(commissionValue !== undefined && {
-          commissionValue: parseFloat(commissionValue),
-        }),
-        ...(isActive !== undefined && { isActive }),
-      },
-    });
-
-    return NextResponse.json({ success: true, data: closer });
-  } catch (error) {
-    console.error("Failed to update closer:", error);
-    return NextResponse.json(
-      { success: false, error: "Failed to update closer" },
-      { status: 500 }
-    );
-  }
-}
-
-export async function DELETE(
-  _request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { id } = await params;
-    await prisma.closer.update({
-      where: { id },
-      data: { isActive: false },
-    });
-
-    return NextResponse.json({ success: true });
-  } catch (error) {
-    console.error("Failed to delete closer:", error);
-    return NextResponse.json(
-      { success: false, error: "Failed to delete closer" },
       { status: 500 }
     );
   }

@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getUserFromRequest } from "@/lib/auth";
 
 export async function GET(request: NextRequest) {
   try {
+    const user = getUserFromRequest(request);
     const searchParams = request.nextUrl.searchParams;
     const from = searchParams.get("from");
     const to = searchParams.get("to");
@@ -21,9 +23,18 @@ export async function GET(request: NextRequest) {
 
     const hasDateFilter = Object.keys(dateFilter).length > 0;
 
-    // All-time revenue (always unfiltered)
+    // Closer filter: closers only see their own data; admins can filter by closerId param
+    const closerIdParam = searchParams.get("closerId");
+    const closerFilter =
+      user?.role === "closer"
+        ? { closerId: user.userId }
+        : closerIdParam
+        ? { closerId: closerIdParam }
+        : {};
+
+    // All-time revenue (always unfiltered by date, but filtered by closer)
     const allTimeResult = await prisma.payment.aggregate({
-      where: { status: "succeeded" },
+      where: { status: "succeeded", ...closerFilter },
       _sum: { amount: true },
       _count: true,
     });
@@ -32,6 +43,7 @@ export async function GET(request: NextRequest) {
     const periodResult = await prisma.payment.aggregate({
       where: {
         status: "succeeded",
+        ...closerFilter,
         ...(hasDateFilter ? { paidAt: dateFilter } : {}),
       },
       _sum: { amount: true },
@@ -50,6 +62,7 @@ export async function GET(request: NextRequest) {
       prevResult = await prisma.payment.aggregate({
         where: {
           status: "succeeded",
+          ...closerFilter,
           paidAt: { gte: prevStart, lte: prevEnd },
         },
         _sum: { amount: true },
@@ -57,12 +70,19 @@ export async function GET(request: NextRequest) {
       });
     }
 
+    // Total commission (all-time, filtered by closer)
+    const commissionResult = await prisma.payment.aggregate({
+      where: { status: "succeeded", ...closerFilter },
+      _sum: { commissionAmount: true },
+    });
+
     const allTimeRevenue = allTimeResult._sum.amount || 0;
     const allTimeSales = allTimeResult._count;
     const periodRevenue = periodResult._sum.amount || 0;
     const periodSales = periodResult._count;
     const prevRevenue = prevResult._sum.amount || 0;
     const prevSales = prevResult._count;
+    const totalCommission = commissionResult._sum.commissionAmount || 0;
 
     const averageDealSize = periodSales > 0 ? periodRevenue / periodSales : 0;
 
@@ -84,7 +104,7 @@ export async function GET(request: NextRequest) {
       success: true,
       data: {
         totalRevenue: allTimeRevenue,
-        monthlyRevenue: periodRevenue,
+        totalCommission,
         totalSales: hasDateFilter ? periodSales : allTimeSales,
         averageDealSize,
         revenueChange: Math.round(revenueChange * 10) / 10,

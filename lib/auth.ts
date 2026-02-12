@@ -1,4 +1,5 @@
 // Shared auth utilities using Web Crypto API (works in both Edge and Node.js)
+import { NextRequest } from "next/server";
 
 const encoder = new TextEncoder();
 
@@ -17,6 +18,25 @@ function bufToHex(buf: ArrayBuffer): string {
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
 }
+
+// --- Token types ---
+
+export interface TokenPayload {
+  userId: string;
+  email: string;
+  name: string;
+  role: "admin" | "closer";
+  iat: number;
+}
+
+export interface AuthUser {
+  userId: string;
+  email: string;
+  name: string;
+  role: "admin" | "closer";
+}
+
+// --- Token signing / verification ---
 
 export async function signToken(
   payload: string,
@@ -57,4 +77,50 @@ export function timingSafeCompare(a: string, b: string): boolean {
     mismatch |= a.charCodeAt(i) ^ b.charCodeAt(i);
   }
   return mismatch === 0;
+}
+
+// --- Token payload helpers ---
+
+export function createTokenPayload(user: {
+  id: string;
+  email: string;
+  name: string;
+  role: string;
+}): string {
+  const payload: TokenPayload = {
+    userId: user.id,
+    email: user.email,
+    name: user.name,
+    role: user.role as "admin" | "closer",
+    iat: Date.now(),
+  };
+  return btoa(JSON.stringify(payload));
+}
+
+export function decodeTokenPayload(token: string): TokenPayload | null {
+  try {
+    const lastDot = token.lastIndexOf(".");
+    if (lastDot === -1) return null;
+    const payloadStr = token.slice(0, lastDot);
+    const decoded = JSON.parse(atob(payloadStr));
+    if (!decoded.userId || !decoded.role) return null;
+    return decoded as TokenPayload;
+  } catch {
+    return null;
+  }
+}
+
+// --- Request helpers (for API routes) ---
+
+export function getUserFromRequest(request: NextRequest): AuthUser | null {
+  const userId = request.headers.get("x-user-id");
+  const role = request.headers.get("x-user-role");
+  if (!userId || !role) return null;
+
+  return {
+    userId,
+    email: request.headers.get("x-user-email") || "",
+    name: request.headers.get("x-user-name") || "",
+    role: role as "admin" | "closer",
+  };
 }

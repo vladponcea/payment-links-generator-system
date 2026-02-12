@@ -17,15 +17,17 @@ import type { RevenueDataPoint } from "@/lib/types";
 interface RevenueChartProps {
   from: string;
   to: string;
+  closerId?: string;
 }
 
-export function RevenueChart({ from, to }: RevenueChartProps) {
+export function RevenueChart({ from, to, closerId }: RevenueChartProps) {
   const [data, setData] = useState<RevenueDataPoint[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     setLoading(true);
     const params = new URLSearchParams({ from, to });
+    if (closerId) params.set("closerId", closerId);
     fetch(`/api/analytics/revenue-over-time?${params}`)
       .then((res) => res.json())
       .then((result) => {
@@ -33,7 +35,7 @@ export function RevenueChart({ from, to }: RevenueChartProps) {
       })
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [from, to]);
+  }, [from, to, closerId]);
 
   return (
     <Card className="col-span-2">

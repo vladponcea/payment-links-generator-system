@@ -41,7 +41,7 @@ export interface PaymentLinkFormData {
 
 export interface DashboardStats {
   totalRevenue: number;
-  monthlyRevenue: number;
+  totalCommission: number;
   totalSales: number;
   averageDealSize: number;
   revenueChange: number;
@@ -72,4 +72,13 @@ export interface ApiResponse<T = unknown> {
   success: boolean;
   data?: T;
   error?: string;
+}
+
+export type UserRole = "admin" | "closer";
+
+export interface UserFormData {
+  name: string;
+  email: string;
+  password: string;
+  role: UserRole;
 }

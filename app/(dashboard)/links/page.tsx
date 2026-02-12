@@ -12,6 +12,7 @@ import { formatCurrency, formatDate, truncate, getPlanTypeLabel, getBillingInter
 import { SplitTimeline } from "@/components/generate/SplitTimeline";
 import { Copy, Check, ExternalLink, Search, Trash2, Eye } from "lucide-react";
 import toast from "react-hot-toast";
+import { useUser } from "@/lib/user-context";
 
 interface PaymentLink {
   id: string;
@@ -38,6 +39,9 @@ interface Closer {
 }
 
 export default function PaymentLinksPage() {
+  const currentUser = useUser();
+  const isCloserRole = currentUser?.role === "closer";
+
   const [links, setLinks] = useState<PaymentLink[]>([]);
   const [closers, setClosers] = useState<Closer[]>([]);
   const [loading, setLoading] = useState(true);
@@ -53,7 +57,7 @@ export default function PaymentLinksPage() {
   const fetchLinks = () => {
     const params = new URLSearchParams();
     if (search) params.set("search", search);
-    if (closerFilter) params.set("closerId", closerFilter);
+    if (closerFilter && !isCloserRole) params.set("closerId", closerFilter);
     if (statusFilter) params.set("status", statusFilter);
     if (typeFilter) params.set("planType", typeFilter);
 
@@ -69,11 +73,13 @@ export default function PaymentLinksPage() {
 
   useEffect(() => {
     fetchLinks();
-    fetch("/api/closers")
-      .then((r) => r.json())
-      .then((d) => {
-        if (d.success) setClosers(d.data);
-      });
+    if (!isCloserRole) {
+      fetch("/api/closers")
+        .then((r) => r.json())
+        .then((d) => {
+          if (d.success) setClosers(d.data);
+        });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [closerFilter, statusFilter, typeFilter]);
 
@@ -145,14 +151,16 @@ export default function PaymentLinksPage() {
               />
             </div>
           </div>
-          <Select
-            options={[
-              { value: "", label: "All Closers" },
-              ...closers.map((c) => ({ value: c.id, label: c.name })),
-            ]}
-            value={closerFilter}
-            onChange={(e) => setCloserFilter(e.target.value)}
-          />
+          {!isCloserRole && (
+            <Select
+              options={[
+                { value: "", label: "All Closers" },
+                ...closers.map((c) => ({ value: c.id, label: c.name })),
+              ]}
+              value={closerFilter}
+              onChange={(e) => setCloserFilter(e.target.value)}
+            />
+          )}
           <Select
             options={[
               { value: "", label: "All Statuses" },

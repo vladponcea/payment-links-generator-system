@@ -11,6 +11,7 @@ import { LinkResult } from "@/components/generate/LinkResult";
 import { Zap, AlertTriangle, Info } from "lucide-react";
 import toast from "react-hot-toast";
 import { formatCurrency } from "@/lib/utils";
+import { useUser } from "@/lib/user-context";
 import type { WhopProduct, PaymentType, SplitMode } from "@/lib/types";
 
 interface Closer {
@@ -31,6 +32,9 @@ const BILLING_OPTIONS = [
 ];
 
 export default function GenerateLinkPage() {
+  const currentUser = useUser();
+  const isCloserRole = currentUser?.role === "closer";
+
   // State
   const [closers, setClosers] = useState<Closer[]>([]);
   const [products, setProducts] = useState<WhopProduct[]>([]);
@@ -39,8 +43,8 @@ export default function GenerateLinkPage() {
   const [generating, setGenerating] = useState(false);
   const [generatedUrl, setGeneratedUrl] = useState<string | null>(null);
 
-  // Form fields
-  const [closerId, setCloserId] = useState("");
+  // Form fields — pre-fill closerId for closer role (user IS the closer)
+  const [closerId, setCloserId] = useState(isCloserRole ? (currentUser?.userId || "") : "");
   const [productId, setProductId] = useState("");
   const [paymentType, setPaymentType] = useState<PaymentType>("one_time");
   const [title, setTitle] = useState("");
@@ -66,13 +70,29 @@ export default function GenerateLinkPage() {
 
   // Load data
   useEffect(() => {
-    fetch("/api/closers")
-      .then((r) => r.json())
-      .then((d) => {
-        if (d.success) setClosers(d.data.filter((c: Closer) => c.isActive !== false));
-      })
-      .catch(console.error)
-      .finally(() => setLoadingClosers(false));
+    if (isCloserRole) {
+      // Closer role: auto-select themselves — user IS the closer
+      if (currentUser?.userId) {
+        setCloserId(currentUser.userId);
+        setClosers([{
+          id: currentUser.userId,
+          name: currentUser.name,
+          email: currentUser.email,
+          commissionType: "",
+          commissionValue: 0,
+          isActive: true,
+        }]);
+      }
+      setLoadingClosers(false);
+    } else {
+      fetch("/api/closers")
+        .then((r) => r.json())
+        .then((d) => {
+          if (d.success) setClosers(d.data.filter((c: Closer) => c.isActive !== false));
+        })
+        .catch(console.error)
+        .finally(() => setLoadingClosers(false));
+    }
 
     fetch("/api/products")
       .then((r) => r.json())
@@ -81,7 +101,7 @@ export default function GenerateLinkPage() {
       })
       .catch(console.error)
       .finally(() => setLoadingProducts(false));
-  }, []);
+  }, [isCloserRole, currentUser]);
 
   // Calculated values
   const selectedCloser = closers.find((c) => c.id === closerId);
@@ -223,50 +243,52 @@ export default function GenerateLinkPage() {
 
   return (
     <div className="max-w-3xl mx-auto space-y-6 animate-fade-in">
-      {/* Step 1: Select Closer */}
-      <Card>
-        <div className="flex items-center gap-2 mb-4">
-          <div className="w-6 h-6 rounded-full bg-cyber-cyan/20 flex items-center justify-center text-xs font-bold text-cyber-cyan">
-            1
+      {/* Step 1: Select Closer (hidden for closer-role users) */}
+      {!isCloserRole && (
+        <Card>
+          <div className="flex items-center gap-2 mb-4">
+            <div className="w-6 h-6 rounded-full bg-cyber-cyan/20 flex items-center justify-center text-xs font-bold text-cyber-cyan">
+              1
+            </div>
+            <h3 className="font-[family-name:var(--font-orbitron)] text-sm font-semibold text-white">
+              Select Closer
+            </h3>
           </div>
-          <h3 className="font-[family-name:var(--font-orbitron)] text-sm font-semibold text-white">
-            Select Closer
-          </h3>
-        </div>
-        {loadingClosers ? (
-          <div className="h-10 animate-shimmer rounded-lg" />
-        ) : closers.length === 0 ? (
-          <div className="flex items-center gap-2 text-cyber-yellow text-sm p-3 bg-cyber-yellow/5 border border-cyber-yellow/20 rounded-lg">
-            <AlertTriangle className="w-4 h-4 flex-shrink-0" />
-            <span>No closers found. Add closers in Settings first.</span>
-          </div>
-        ) : (
-          <Select
-            options={closers.map((c) => ({
-              value: c.id,
-              label: `${c.name} (${c.commissionType === "percentage" ? `${c.commissionValue}%` : `$${c.commissionValue}`} commission)`,
-            }))}
-            value={closerId}
-            onChange={(e) => setCloserId(e.target.value)}
-            placeholder="Choose a closer..."
-          />
-        )}
-        {selectedCloser && (
-          <div className="mt-2 flex items-center gap-2">
-            <Badge variant="cyan">
-              {selectedCloser.commissionType === "percentage"
-                ? `${selectedCloser.commissionValue}% commission`
-                : `$${selectedCloser.commissionValue} per sale`}
-            </Badge>
-          </div>
-        )}
-      </Card>
+          {loadingClosers ? (
+            <div className="h-10 animate-shimmer rounded-lg" />
+          ) : closers.length === 0 ? (
+            <div className="flex items-center gap-2 text-cyber-yellow text-sm p-3 bg-cyber-yellow/5 border border-cyber-yellow/20 rounded-lg">
+              <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+              <span>No closers found. Add closers in Settings first.</span>
+            </div>
+          ) : (
+            <Select
+              options={closers.map((c) => ({
+                value: c.id,
+                label: `${c.name} (${c.commissionType === "percentage" ? `${c.commissionValue}%` : `$${c.commissionValue}`} commission)`,
+              }))}
+              value={closerId}
+              onChange={(e) => setCloserId(e.target.value)}
+              placeholder="Choose a closer..."
+            />
+          )}
+          {selectedCloser && (
+            <div className="mt-2 flex items-center gap-2">
+              <Badge variant="cyan">
+                {selectedCloser.commissionType === "percentage"
+                  ? `${selectedCloser.commissionValue}% commission`
+                  : `$${selectedCloser.commissionValue} per sale`}
+              </Badge>
+            </div>
+          )}
+        </Card>
+      )}
 
       {/* Step 2: Select Product */}
       <Card>
         <div className="flex items-center gap-2 mb-4">
           <div className="w-6 h-6 rounded-full bg-cyber-cyan/20 flex items-center justify-center text-xs font-bold text-cyber-cyan">
-            2
+            {isCloserRole ? 1 : 2}
           </div>
           <h3 className="font-[family-name:var(--font-orbitron)] text-sm font-semibold text-white">
             Select Product
@@ -296,7 +318,7 @@ export default function GenerateLinkPage() {
       <Card>
         <div className="flex items-center gap-2 mb-4">
           <div className="w-6 h-6 rounded-full bg-cyber-cyan/20 flex items-center justify-center text-xs font-bold text-cyber-cyan">
-            3
+            {isCloserRole ? 2 : 3}
           </div>
           <h3 className="font-[family-name:var(--font-orbitron)] text-sm font-semibold text-white">
             Payment Configuration
@@ -508,33 +530,13 @@ export default function GenerateLinkPage() {
           </div>
         )}
 
-        {/* Optional Fields */}
-        <div className="mt-6 pt-4 border-t border-cyber-border space-y-4">
-          <Input
-            label="Title (optional)"
-            placeholder="e.g., Coaching Program - 2-Pay Plan"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-          />
-          <div className="space-y-1.5">
-            <label className="block text-sm font-medium text-cyber-text">
-              Description (optional)
-            </label>
-            <textarea
-              className="w-full bg-cyber-black border border-cyber-border rounded-lg px-4 py-2.5 text-sm text-white placeholder:text-cyber-muted/60 focus:border-cyber-cyan focus:ring-1 focus:ring-cyber-cyan/50 focus:outline-none transition-all duration-200 min-h-[80px] resize-y"
-              placeholder="Internal description..."
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-            />
-          </div>
-        </div>
       </Card>
 
       {/* Step 4: Review & Generate */}
       <Card glow>
         <div className="flex items-center gap-2 mb-4">
           <div className="w-6 h-6 rounded-full bg-cyber-cyan/20 flex items-center justify-center text-xs font-bold text-cyber-cyan">
-            4
+            {isCloserRole ? 3 : 4}
           </div>
           <h3 className="font-[family-name:var(--font-orbitron)] text-sm font-semibold text-white">
             Review & Generate

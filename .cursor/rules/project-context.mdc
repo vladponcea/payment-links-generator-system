@@ -1,0 +1,175 @@
+---
+description: Complete project context for CLOSERPAY - Payment Link Generator & Sales Analytics Dashboard
+alwaysApply: true
+---
+
+# CLOSERPAY — Project Context
+
+## Overview
+
+Full-stack Next.js app for generating custom Whop checkout links and tracking sales performance. Built for high-ticket sales teams using Whop as their payment processor.
+
+**Core features:** Payment link generation (one-time, recurring, split-pay), closer attribution, real-time analytics, webhook-driven payment tracking, commission calculation, CSV export, role-based access control.
+
+## Tech Stack
+
+- **Framework:** Next.js 16.1.6 (App Router, TypeScript, React 19.2.3)
+- **Database:** PostgreSQL via Prisma 7.4.0 (`@prisma/adapter-pg`)
+- **Payments:** Whop SDK 0.0.27 (`@whop/sdk`)
+- **Styling:** Tailwind CSS 4 with custom cyberpunk theme (inline `@theme` in `globals.css`)
+- **Charts:** Recharts 3.7.0
+- **UI Primitives:** Radix UI (dialog, dropdown-menu, popover, select, switch, tabs, tooltip)
+- **Icons:** Lucide React
+- **Notifications:** react-hot-toast
+- **Dates:** date-fns 4.1.0
+- **Auth:** Custom HMAC-SHA256 token system + bcryptjs password hashing
+- **Password hashing:** bcryptjs
+
+## Project Structure
+
+```
+app/
+  layout.tsx                    # Root layout (fonts, toast, dark mode)
+  globals.css                   # Tailwind v4 theme + custom cyber styles
+  login/page.tsx                # Email/password login + initial setup flow
+  (dashboard)/
+    layout.tsx                  # Server component: reads token, wraps in UserProvider
+    page.tsx                    # Dashboard (stats, charts, recent payments)
+    generate/page.tsx           # Generate payment link form (closer auto-selected for closer role)
+    links/page.tsx              # Payment links list (filtered for closer role)
+    payments/page.tsx           # Payments list with filters (filtered for closer role)
+    closers/page.tsx            # Legacy closers page (hidden from nav, closers managed via Settings > User Accounts)
+    settings/page.tsx           # App settings + user management with auto-closer creation (admin only)
+  api/
+    auth/login/route.ts         # POST — email/password login with bcrypt
+    auth/logout/route.ts        # POST — clears auth cookie
+    auth/me/route.ts            # GET — returns current user from headers
+    auth/setup/route.ts         # GET check + POST create initial admin (only when 0 users)
+    closers/route.ts            # GET list, POST create (admin only via middleware, used internally by generate page)
+    closers/[id]/route.ts       # GET, PUT, DELETE (admin only via middleware)
+    users/route.ts              # GET list, POST create with auto-closer creation (admin only)
+    users/[id]/route.ts         # PUT update (syncs to Closer), DELETE deactivate (syncs to Closer)
+    products/route.ts           # GET — fetches from Whop API
+    payment-links/route.ts      # GET list (filtered by role), POST create (closer enforced)
+    payment-links/[id]/route.ts # GET, DELETE (archive)
+    payments/route.ts           # GET list (filtered by role)
+    payments/[id]/route.ts      # GET details
+    payments/export/route.ts    # GET CSV export (filtered by role)
+    webhooks/whop/route.ts      # POST — Whop webhook handler
+    webhooks/register/route.ts  # POST — register webhook with Whop (admin only)
+    webhooks/status/route.ts    # GET — webhook registration status (admin only)
+    analytics/overview/route.ts         # GET dashboard stats (filtered by role)
+    analytics/revenue-over-time/route.ts # GET time series (filtered by role)
+    analytics/by-closer/route.ts        # GET revenue by closer (filtered by role)
+    analytics/by-product/route.ts       # GET revenue by product (filtered by role)
+
+components/
+  ui/          Badge, Button, Card, Input, Modal, Select, Skeleton
+  layout/      Sidebar (collapsible, role-aware nav + logout), TopBar (page title)
+  dashboard/   StatsCards, RevenueChart, ProductPieChart, CloserBarChart, RecentPayments, DateFilter
+  generate/    LinkResult (copy/share), SplitTimeline (visual schedule)
+
+lib/
+  prisma.ts        # Prisma client singleton with pg adapter
+  auth.ts          # Token types (TokenPayload, AuthUser), signToken, verifyToken, timingSafeCompare, createTokenPayload, decodeTokenPayload, getUserFromRequest
+  whop.ts          # Whop SDK client + COMPANY_ID export
+  types.ts         # All shared TypeScript types/interfaces
+  utils.ts         # cn(), formatCurrency, formatDate, formatDateTime, getInitials, truncate, helpers
+  user-context.tsx # UserProvider (React context), useUser(), useIsAdmin()
+
+prisma/
+  schema.prisma  # Database schema (6 models)
+```
+
+## Authentication & Authorization
+
+### Roles
+- **admin** — Full access to everything (closers management, settings, user management, all data)
+- **closer** — Limited access: dashboard, generate links, payment links, payments (own data only)
+
+### Auth Flow
+1. Login page (`/login`) accepts email + password
+2. First visit: if no users exist, shows "Create admin account" setup form
+3. POST `/api/auth/login` → finds user by email → bcrypt.compare password → creates HMAC-SHA256 signed token with user data → sets HTTP-only cookie (`auth_token`)
+4. Token payload contains: `userId`, `email`, `name`, `role`, `iat`
+5. `middleware.ts` verifies token on every request, decodes payload, sets headers (`x-user-id`, `x-user-role`, `x-user-email`, `x-user-name`)
+6. Middleware blocks closer role from admin-only routes (`/settings`, `/api/users`, `/api/webhooks/register`, `/api/webhooks/status`)
+7. API routes use `getUserFromRequest(request)` to read user info from headers
+8. Closer-role users: all data queries automatically filtered by their `userId` (a closer IS a user — their userId is used as closerId in PaymentLink/Payment)
+
+### User Context (Client-Side)
+- `UserProvider` wraps dashboard layout (server component reads token from cookie, passes user to client provider)
+- Components use `useUser()` hook to get current user info
+- `useIsAdmin()` shortcut for role checks
+- Sidebar hides admin-only nav items for closer role
+- Generate page hides closer selection step for closer role
+- Payments/Links pages hide closer filter dropdown for closer role
+
+## Database Schema (Prisma)
+
+**User** (`users`): id, email (unique), passwordHash, name, role ("admin"|"closer", default "closer"), phone?, avatarUrl?, commissionType ("percentage"|"flat", default "percentage"), commissionValue (default 0), isActive (default true), createdAt, updatedAt. Relations: paymentLinks[], payments[]. A user with role "closer" IS a closer — no separate Closer model.
+
+**PaymentLink** (`payment_links`): id, closerId (FK → User), whopPlanId, whopProductId, productName, purchaseUrl, planType ("one_time"|"renewal"|"split_pay"|"custom_split"), totalAmount, initialPrice, renewalPrice?, billingPeriodDays?, splitPayments? (2-24), customSplitDescription?, currency (default "usd"), visibility (default "quick_link"), status (default "active"), title?, description?, internalNotes? (JSON), createdAt, updatedAt. Relations: closer (User), payments[].
+
+**Payment** (`payments`): id, whopPaymentId (unique), closerId (FK → User), paymentLinkId? (FK), whopPlanId?, whopProductId?, productName?, customerEmail?, customerName?, customerId?, membershipId?, amount, currency (default "usd"), status ("succeeded"|"failed"|"pending"|"refunded"), paidAt?, refundedAt?, refundAmount?, installmentNumber?, isRecurring (default false), commissionAmount?, whopWebhookData? (JSON), createdAt, updatedAt. Relations: closer (User), paymentLink?.
+
+**WebhookEvent** (`webhook_events`): id, whopMessageId (unique — idempotency key), eventType, payload (JSON), processedAt?, error?, createdAt.
+
+**AppSettings** (`app_settings`): id (default "default"), whopWebhookId?, webhookSecret?, webhookUrl?, enabledProductIds? (JSON, default []), registeredAt?, createdAt, updatedAt.
+
+## Key Data Flows
+
+### Payment Link Generation
+1. User selects closer (admin) or auto-assigned (closer role) + product on `/generate`
+2. Configures payment type (one-time / recurring / split-pay with equal or custom splits)
+3. POST `/api/payment-links` → validates → enforces closerId for closer role → creates plan on Whop → stores in DB
+4. Returns purchase URL → shown via `LinkResult` component (copy/share)
+
+### Webhook Payment Processing
+1. Customer pays → Whop sends POST to `/api/webhooks/whop`
+2. Handler verifies `webhook-secret` header (timing-safe compare)
+3. Checks `WebhookEvent` table for idempotency (uses payment ID as key)
+4. Events: `payment.succeeded`, `payment.failed`, `payment.pending`, `refund.created/updated`
+5. Creates/updates `Payment` record, calculates commission (percentage or flat)
+
+### Role-Based Data Filtering
+- All API routes (payments, payment-links, analytics) check `getUserFromRequest()`
+- If role is "closer", queries add `closerId = user.userId` filter automatically
+- Admin sees all data, closer sees only their own
+
+## Business Logic
+
+- **Commission:** Percentage = `amount * (value / 100)`, Flat = `value` directly
+- **Split payments:** Equal splits divide total evenly; custom splits allow different initial payment; uses Whop renewal plan with `split_pay_required_payments`
+- **Soft deletes:** Users set `isActive=false`, payment links set `status="expired"`
+- **Closers are users:** A closer is simply a user with `role="closer"`. Commission settings (`commissionType`, `commissionValue`) live directly on the User model. No separate Closer model — closers are managed entirely through User Accounts in Settings.
+
+## Environment Variables
+
+Required: `DATABASE_URL`, `WHOP_API_KEY`, `WHOP_COMPANY_ID`, `APP_PASSWORD` (token signing secret), `NEXT_PUBLIC_APP_URL`
+Optional: `WHOP_WEBHOOK_SECRET` (fallback if not in DB)
+
+## Design System
+
+Cyberpunk/neon theme with custom Tailwind v4 tokens defined in `globals.css`:
+- Backgrounds: `cyber-black` (#0A0A0F), `cyber-dark` (#12121A), `cyber-card` (#1A1A2E)
+- Borders: `cyber-border` (#2A2A3E)
+- Accents: `cyber-cyan` (#00F0FF), `cyber-purple` (#A855F7), `cyber-green` (#00FF88), `cyber-red` (#FF3366), `cyber-yellow` (#FFD700)
+- Fonts: Space Grotesk (headings), Inter (body), JetBrains Mono (mono)
+- Effects: grid background, scanlines, glow effects, animations (pulse-glow, fade-in, shimmer, count-up)
+
+## Scripts
+
+- `npm run dev` — Next.js dev server
+- `npm run build` — `prisma generate && next build`
+- `npm run db:push` — Push Prisma schema to database
+- `npm run lint` — ESLint
+
+## Conventions
+
+- Path alias: `@/*` maps to project root
+- No global state library — React context for user, local `useState` + API fetches for data
+- API responses use `ApiResponse<T>` wrapper type
+- User info passed to API routes via middleware-set headers (`x-user-*`)
+- Pagination: default 20, max 100 per page
+- Date filtering via `from`/`to` query params (ISO strings)

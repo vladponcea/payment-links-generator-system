@@ -12,15 +12,17 @@ const COLORS = ["#00F0FF", "#A855F7", "#00FF88", "#FFD700", "#FF3366", "#6366F1"
 interface ProductPieChartProps {
   from: string;
   to: string;
+  closerId?: string;
 }
 
-export function ProductPieChart({ from, to }: ProductPieChartProps) {
+export function ProductPieChart({ from, to, closerId }: ProductPieChartProps) {
   const [data, setData] = useState<ProductRevenue[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     setLoading(true);
     const params = new URLSearchParams({ from, to });
+    if (closerId) params.set("closerId", closerId);
     fetch(`/api/analytics/by-product?${params}`)
       .then((res) => res.json())
       .then((result) => {
@@ -28,7 +30,7 @@ export function ProductPieChart({ from, to }: ProductPieChartProps) {
       })
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [from, to]);
+  }, [from, to, closerId]);
 
   return (
     <Card>

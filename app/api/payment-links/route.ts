@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { whopClient, COMPANY_ID } from "@/lib/whop";
+import { getUserFromRequest } from "@/lib/auth";
 
 export async function GET(request: NextRequest) {
   try {
+    const user = getUserFromRequest(request);
     const searchParams = request.nextUrl.searchParams;
     const closerId = searchParams.get("closerId");
     const status = searchParams.get("status");
@@ -13,7 +15,13 @@ export async function GET(request: NextRequest) {
     const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") || "20") || 20));
 
     const where: Record<string, unknown> = {};
-    if (closerId) where.closerId = closerId;
+
+    // Closers can only see their own payment links
+    if (user?.role === "closer") {
+      where.closerId = user.userId;
+    } else if (closerId) {
+      where.closerId = closerId;
+    }
     if (status) where.status = status;
     if (planType) where.planType = planType;
     if (search) {
@@ -58,9 +66,12 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const user = getUserFromRequest(request);
     const body = await request.json();
-    const {
+    let {
       closerId,
+    } = body;
+    const {
       productId,
       productName,
       paymentType,
@@ -75,6 +86,11 @@ export async function POST(request: NextRequest) {
       initialPrice,
       installmentPrice,
     } = body;
+
+    // Closers can only create links for themselves
+    if (user?.role === "closer") {
+      closerId = user.userId;
+    }
 
     if (!closerId || !productId || !paymentType) {
       return NextResponse.json(
@@ -117,9 +133,9 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Verify closer exists
-    const closer = await prisma.closer.findUnique({ where: { id: closerId } });
-    if (!closer) {
+    // Verify closer (active user with closer role) exists
+    const closer = await prisma.user.findUnique({ where: { id: closerId } });
+    if (!closer || closer.role !== "closer" || !closer.isActive) {
       return NextResponse.json(
         { success: false, error: "Closer not found" },
         { status: 404 }

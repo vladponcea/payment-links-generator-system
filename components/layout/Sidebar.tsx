@@ -1,32 +1,44 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard,
   LinkIcon,
   CreditCard,
-  Users,
   Settings,
   Zap,
   ChevronLeft,
   ChevronRight,
+  LogOut,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
+import { useUser } from "@/lib/user-context";
 
-const navItems = [
-  { href: "/", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/generate", label: "Generate Link", icon: Zap },
-  { href: "/links", label: "Payment Links", icon: LinkIcon },
-  { href: "/payments", label: "Payments", icon: CreditCard },
-  { href: "/closers", label: "Closers", icon: Users },
-  { href: "/settings", label: "Settings", icon: Settings },
+const allNavItems = [
+  { href: "/", label: "Dashboard", icon: LayoutDashboard, adminOnly: false },
+  { href: "/generate", label: "Generate Link", icon: Zap, adminOnly: false },
+  { href: "/links", label: "Payment Links", icon: LinkIcon, adminOnly: false },
+  { href: "/payments", label: "Payments", icon: CreditCard, adminOnly: false },
+  { href: "/settings", label: "Settings", icon: Settings, adminOnly: true },
 ];
 
 export function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
   const [collapsed, setCollapsed] = useState(false);
+  const user = useUser();
+
+  const navItems = allNavItems.filter(
+    (item) => !item.adminOnly || user?.role === "admin"
+  );
+
+  const handleLogout = async () => {
+    await fetch("/api/auth/logout", { method: "POST" });
+    router.push("/login");
+    router.refresh();
+  };
 
   return (
     <aside
@@ -91,6 +103,39 @@ export function Sidebar() {
           );
         })}
       </nav>
+
+      {/* User info + Logout */}
+      {user && !collapsed && (
+        <div className="px-3 py-3 border-t border-cyber-border">
+          <div className="flex items-center gap-3 mb-2 px-1">
+            <div className="w-8 h-8 rounded-full bg-cyber-cyan/20 flex items-center justify-center text-xs font-bold text-cyber-cyan flex-shrink-0">
+              {user.name.charAt(0).toUpperCase()}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-white truncate">{user.name}</p>
+              <p className="text-xs text-cyber-muted capitalize">{user.role}</p>
+            </div>
+          </div>
+          <button
+            onClick={handleLogout}
+            className="flex items-center gap-2 w-full px-3 py-2 rounded-lg text-cyber-muted hover:text-cyber-red hover:bg-cyber-red/10 transition-all text-sm"
+          >
+            <LogOut className="w-4 h-4" />
+            <span>Sign out</span>
+          </button>
+        </div>
+      )}
+      {user && collapsed && (
+        <div className="px-2 py-3 border-t border-cyber-border">
+          <button
+            onClick={handleLogout}
+            className="flex items-center justify-center w-full p-2 rounded-lg text-cyber-muted hover:text-cyber-red hover:bg-cyber-red/10 transition-all"
+            title="Sign out"
+          >
+            <LogOut className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       {/* Collapse toggle */}
       <button

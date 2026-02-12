@@ -17,16 +17,17 @@ import type { DashboardStats } from "@/lib/types";
 interface StatsCardsProps {
   from: string;
   to: string;
-  label: string;
+  closerId?: string;
 }
 
-export function StatsCards({ from, to, label }: StatsCardsProps) {
+export function StatsCards({ from, to, closerId }: StatsCardsProps) {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     setLoading(true);
     const params = new URLSearchParams({ from, to });
+    if (closerId) params.set("closerId", closerId);
     fetch(`/api/analytics/overview?${params}`)
       .then((res) => res.json())
       .then((data) => {
@@ -34,7 +35,7 @@ export function StatsCards({ from, to, label }: StatsCardsProps) {
       })
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [from, to]);
+  }, [from, to, closerId]);
 
   if (loading) {
     return (
@@ -57,11 +58,11 @@ export function StatsCards({ from, to, label }: StatsCardsProps) {
       change: stats.revenueChange,
     },
     {
-      title: `Revenue (${label})`,
-      value: formatCurrency(stats.monthlyRevenue),
+      title: "Total Commission",
+      value: formatCurrency(stats.totalCommission),
       icon: TrendingUp,
       color: "cyber-green",
-      change: stats.revenueChange,
+      change: null,
     },
     {
       title: "Total Sales",

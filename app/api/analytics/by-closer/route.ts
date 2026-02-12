@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getUserFromRequest } from "@/lib/auth";
 
 export async function GET(request: NextRequest) {
   try {
+    const user = getUserFromRequest(request);
     const searchParams = request.nextUrl.searchParams;
     const from = searchParams.get("from");
     const to = searchParams.get("to");
@@ -19,8 +21,17 @@ export async function GET(request: NextRequest) {
     }
     const hasDateFilter = Object.keys(dateFilter).length > 0;
 
-    const closers = await prisma.closer.findMany({
-      where: { isActive: true },
+    // Closer filter: closers only see their own data; admins can filter by closerId param
+    const closerIdParam = searchParams.get("closerId");
+    const closerWhere =
+      user?.role === "closer"
+        ? { id: user.userId, role: "closer" as const, isActive: true }
+        : closerIdParam
+        ? { id: closerIdParam, role: "closer" as const, isActive: true }
+        : { role: "closer" as const, isActive: true };
+
+    const closers = await prisma.user.findMany({
+      where: closerWhere,
       select: {
         id: true,
         name: true,
