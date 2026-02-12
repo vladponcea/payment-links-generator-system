@@ -9,6 +9,7 @@ import { Badge, StatusBadge } from "@/components/ui/Badge";
 import { Modal } from "@/components/ui/Modal";
 import { TableRowSkeleton } from "@/components/ui/Skeleton";
 import { formatCurrency, formatDate, truncate, getPlanTypeLabel, getBillingIntervalLabel } from "@/lib/utils";
+import { SplitTimeline } from "@/components/generate/SplitTimeline";
 import { Copy, Check, ExternalLink, Search, Trash2, Eye } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -332,11 +333,13 @@ export default function PaymentLinksPage() {
               </div>
             </div>
 
-            {selectedLink.customSplitDescription && (
-              <div>
-                <p className="text-cyber-muted text-xs mb-1">Split Breakdown</p>
-                <p className="text-sm text-cyber-text">{selectedLink.customSplitDescription}</p>
-              </div>
+            {selectedLink.splitPayments && selectedLink.splitPayments >= 2 && selectedLink.billingPeriodDays && (
+              <SplitTimeline
+                initialPrice={selectedLink.planType === "custom_split" ? selectedLink.initialPrice : (selectedLink.renewalPrice ?? selectedLink.totalAmount / selectedLink.splitPayments)}
+                installmentPrice={selectedLink.renewalPrice ?? selectedLink.totalAmount / selectedLink.splitPayments}
+                numberOfPayments={selectedLink.splitPayments}
+                billingPeriodDays={selectedLink.billingPeriodDays}
+              />
             )}
 
             <div>
