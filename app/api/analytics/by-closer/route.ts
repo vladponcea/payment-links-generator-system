@@ -21,10 +21,13 @@ export async function GET(request: NextRequest) {
     }
     const hasDateFilter = Object.keys(dateFilter).length > 0;
 
-    // Closer filter: closers only see their own data; admins can filter by closerId param
+    // Leaderboard mode: returns all closers regardless of role (for the leaderboard widget)
+    const leaderboard = searchParams.get("leaderboard") === "true";
+
+    // Closer filter: closers only see their own data unless leaderboard mode
     const closerIdParam = searchParams.get("closerId");
     const closerWhere =
-      user?.role === "closer"
+      user?.role === "closer" && !leaderboard
         ? { id: user.userId, role: "closer" as const, isActive: true }
         : closerIdParam
         ? { id: closerIdParam, role: "closer" as const, isActive: true }

@@ -90,3 +90,21 @@ export function getBillingIntervalLabel(days: number): string {
       return `Every ${days} days`;
   }
 }
+
+// Product display names with emoji prefixes
+const PRODUCT_EMOJI_MAP: Record<string, string> = {
+  "CareerGrowth Guided": "🤝",
+  "CareerGrowth Advanced": "🚀",
+  "CareerGrowth VIP": "🎓",
+  "CareerGrowth VTO": "🎥",
+};
+
+export function displayProductName(name: string | null | undefined): string {
+  if (!name) return "Unknown Product";
+  for (const [keyword, emoji] of Object.entries(PRODUCT_EMOJI_MAP)) {
+    if (name.startsWith(keyword)) {
+      return `${emoji} ${name}`;
+    }
+  }
+  return name;
+}

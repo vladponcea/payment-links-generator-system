@@ -6,6 +6,7 @@ import { RevenueChart } from "@/components/dashboard/RevenueChart";
 import { CloserBarChart } from "@/components/dashboard/CloserBarChart";
 import { ProductPieChart } from "@/components/dashboard/ProductPieChart";
 import { RecentPayments } from "@/components/dashboard/RecentPayments";
+import { Leaderboard } from "@/components/dashboard/Leaderboard";
 import {
   DateFilter,
   getDefaultDateRange,
@@ -66,7 +67,14 @@ export default function DashboardPage() {
           <CloserBarChart from={dateRange.from} to={dateRange.to} closerId={closerFilter || undefined} />
         </div>
       ) : (
-        <RevenueChart from={dateRange.from} to={dateRange.to} closerId={closerFilter || undefined} />
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <RevenueChart from={dateRange.from} to={dateRange.to} />
+          <Leaderboard from={dateRange.from} to={dateRange.to} />
+        </div>
+      )}
+
+      {isAdmin && (
+        <Leaderboard from={dateRange.from} to={dateRange.to} />
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

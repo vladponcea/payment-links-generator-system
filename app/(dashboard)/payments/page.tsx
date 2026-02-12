@@ -7,7 +7,7 @@ import { Select } from "@/components/ui/Select";
 import { StatusBadge } from "@/components/ui/Badge";
 import { Modal } from "@/components/ui/Modal";
 import { TableRowSkeleton } from "@/components/ui/Skeleton";
-import { formatCurrency, formatDateTime } from "@/lib/utils";
+import { formatCurrency, formatDateTime, displayProductName } from "@/lib/utils";
 import { Search, Download, X } from "lucide-react";
 import toast from "react-hot-toast";
 import { useUser } from "@/lib/user-context";
@@ -191,7 +191,7 @@ export default function PaymentsPage() {
                     </td>
                     <td className="py-3 px-4 text-sm">{payment.closer.name}</td>
                     <td className="py-3 px-4 text-sm text-cyber-muted">
-                      {payment.paymentLink?.productName || payment.productName || "—"}
+                      {displayProductName(payment.paymentLink?.productName || payment.productName)}
                     </td>
                     <td className="py-3 px-4 text-right font-[family-name:var(--font-jetbrains)] text-sm text-white">
                       {formatCurrency(payment.amount)}
@@ -263,9 +263,7 @@ export default function PaymentsPage() {
               <div>
                 <p className="text-cyber-muted text-xs mb-1">Product</p>
                 <p className="text-white">
-                  {selectedPayment.paymentLink?.productName ||
-                    selectedPayment.productName ||
-                    "—"}
+                  {displayProductName(selectedPayment.paymentLink?.productName || selectedPayment.productName)}
                 </p>
               </div>
               <div>

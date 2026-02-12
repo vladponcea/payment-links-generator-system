@@ -8,7 +8,7 @@ import { Select } from "@/components/ui/Select";
 import { Badge, StatusBadge } from "@/components/ui/Badge";
 import { Modal } from "@/components/ui/Modal";
 import { TableRowSkeleton } from "@/components/ui/Skeleton";
-import { formatCurrency, formatDate, truncate, getPlanTypeLabel, getBillingIntervalLabel } from "@/lib/utils";
+import { formatCurrency, formatDate, truncate, getPlanTypeLabel, getBillingIntervalLabel, displayProductName } from "@/lib/utils";
 import { SplitTimeline } from "@/components/generate/SplitTimeline";
 import { Copy, Check, ExternalLink, Search, Trash2, Eye } from "lucide-react";
 import toast from "react-hot-toast";
@@ -228,7 +228,7 @@ export default function PaymentLinksPage() {
                       {formatDate(link.createdAt)}
                     </td>
                     <td className="py-3 px-4 text-sm">{link.closer.name}</td>
-                    <td className="py-3 px-4 text-sm text-cyber-text">{link.productName}</td>
+                    <td className="py-3 px-4 text-sm text-cyber-text">{displayProductName(link.productName)}</td>
                     <td className="py-3 px-4">
                       <Badge variant={getPlanTypeBadgeVariant(link.planType)}>
                         {getPlanTypeLabel(link.planType)}
@@ -317,7 +317,7 @@ export default function PaymentLinksPage() {
               </div>
               <div>
                 <p className="text-cyber-muted text-xs mb-1">Product</p>
-                <p className="text-white">{selectedLink.productName}</p>
+                <p className="text-white">{displayProductName(selectedLink.productName)}</p>
               </div>
               <div>
                 <p className="text-cyber-muted text-xs mb-1">Type</p>

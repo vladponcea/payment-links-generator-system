@@ -3,7 +3,7 @@
 import { Card } from "@/components/ui/Card";
 import { StatusBadge } from "@/components/ui/Badge";
 import { TableRowSkeleton } from "@/components/ui/Skeleton";
-import { formatCurrency, formatDateTime } from "@/lib/utils";
+import { formatCurrency, formatDateTime, displayProductName } from "@/lib/utils";
 import { useEffect, useState } from "react";
 
 interface RecentPayment {
@@ -14,6 +14,7 @@ interface RecentPayment {
   status: string;
   paidAt: string | null;
   installmentNumber: number | null;
+  productName: string | null;
   closer: { name: string };
   paymentLink: {
     productName: string;
@@ -113,7 +114,7 @@ export function RecentPayments({ from, to, closerId }: RecentPaymentsProps) {
                   </td>
                   <td className="py-3 px-4 text-sm">{payment.closer.name}</td>
                   <td className="py-3 px-4 text-sm text-cyber-muted">
-                    {payment.paymentLink?.productName || "—"}
+                    {displayProductName(payment.paymentLink?.productName || payment.productName)}
                   </td>
                   <td className="py-3 px-4 text-right font-[family-name:var(--font-jetbrains)] text-sm text-white">
                     {formatCurrency(payment.amount)}

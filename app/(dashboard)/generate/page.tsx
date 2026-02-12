@@ -10,7 +10,7 @@ import { SplitTimeline } from "@/components/generate/SplitTimeline";
 import { LinkResult } from "@/components/generate/LinkResult";
 import { Zap, AlertTriangle, Info } from "lucide-react";
 import toast from "react-hot-toast";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, displayProductName } from "@/lib/utils";
 import { useUser } from "@/lib/user-context";
 import type { WhopProduct, PaymentType, SplitMode } from "@/lib/types";
 
@@ -305,7 +305,7 @@ export default function GenerateLinkPage() {
           <Select
             options={products.map((p) => ({
               value: p.id,
-              label: p.title,
+              label: displayProductName(p.title),
             }))}
             value={productId}
             onChange={(e) => setProductId(e.target.value)}
@@ -551,7 +551,7 @@ export default function GenerateLinkPage() {
           </div>
           <div className="flex justify-between">
             <span className="text-cyber-muted">Product</span>
-            <span className="text-white">{selectedProduct?.title || "Not selected"}</span>
+            <span className="text-white">{selectedProduct ? displayProductName(selectedProduct.title) : "Not selected"}</span>
           </div>
           <div className="flex justify-between">
             <span className="text-cyber-muted">Type</span>

@@ -2,7 +2,7 @@
 
 import { Card } from "@/components/ui/Card";
 import { Skeleton } from "@/components/ui/Skeleton";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, displayProductName } from "@/lib/utils";
 import { useEffect, useState } from "react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 import type { ProductRevenue } from "@/lib/types";
@@ -26,7 +26,7 @@ export function ProductPieChart({ from, to, closerId }: ProductPieChartProps) {
     fetch(`/api/analytics/by-product?${params}`)
       .then((res) => res.json())
       .then((result) => {
-        if (result.success) setData(result.data);
+        if (result.success) setData(result.data.map((d: ProductRevenue) => ({ ...d, productName: displayProductName(d.productName) })));
       })
       .catch(console.error)
       .finally(() => setLoading(false));
