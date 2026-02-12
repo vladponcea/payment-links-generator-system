@@ -1,0 +1,109 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Closer {
+  id              String   @id @default(cuid())
+  name            String
+  email           String   @unique
+  phone           String?
+  avatarUrl       String?  @map("avatar_url")
+  commissionType  String   @default("percentage") @map("commission_type")
+  commissionValue Float    @default(0) @map("commission_value")
+  isActive        Boolean  @default(true) @map("is_active")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  paymentLinks PaymentLink[]
+  payments     Payment[]
+
+  @@map("closers")
+}
+
+model PaymentLink {
+  id                     String   @id @default(cuid())
+  closerId               String   @map("closer_id")
+  whopPlanId             String   @map("whop_plan_id")
+  whopProductId          String   @map("whop_product_id")
+  productName            String   @map("product_name")
+  purchaseUrl            String   @map("purchase_url")
+  planType               String   @map("plan_type")
+  totalAmount            Float    @map("total_amount")
+  initialPrice           Float    @map("initial_price")
+  renewalPrice           Float?   @map("renewal_price")
+  billingPeriodDays      Int?     @map("billing_period_days")
+  splitPayments          Int?     @map("split_payments")
+  customSplitDescription String?  @map("custom_split_description")
+  currency               String   @default("usd")
+  visibility             String   @default("quick_link")
+  status                 String   @default("active")
+  title                  String?
+  description            String?
+  internalNotes          String?  @map("internal_notes")
+  createdAt              DateTime @default(now()) @map("created_at")
+  updatedAt              DateTime @updatedAt @map("updated_at")
+
+  closer   Closer    @relation(fields: [closerId], references: [id])
+  payments Payment[]
+
+  @@map("payment_links")
+}
+
+model Payment {
+  id                String    @id @default(cuid())
+  whopPaymentId     String    @unique @map("whop_payment_id")
+  closerId          String    @map("closer_id")
+  paymentLinkId     String?   @map("payment_link_id")
+  whopPlanId        String?   @map("whop_plan_id")
+  whopProductId     String?   @map("whop_product_id")
+  productName       String?   @map("product_name")
+  customerEmail     String?   @map("customer_email")
+  customerName      String?   @map("customer_name")
+  customerId        String?   @map("customer_id")
+  membershipId      String?   @map("membership_id")
+  amount            Float
+  currency          String    @default("usd")
+  status            String
+  paidAt            DateTime? @map("paid_at")
+  refundedAt        DateTime? @map("refunded_at")
+  refundAmount      Float?    @map("refund_amount")
+  installmentNumber Int?      @map("installment_number")
+  isRecurring       Boolean   @default(false) @map("is_recurring")
+  commissionAmount  Float?    @map("commission_amount")
+  whopWebhookData   Json?     @map("whop_webhook_data")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  closer      Closer       @relation(fields: [closerId], references: [id])
+  paymentLink PaymentLink? @relation(fields: [paymentLinkId], references: [id])
+
+  @@map("payments")
+}
+
+model WebhookEvent {
+  id            String    @id @default(cuid())
+  whopMessageId String    @unique @map("whop_message_id")
+  eventType     String    @map("event_type")
+  payload       Json
+  processedAt   DateTime? @map("processed_at")
+  error         String?
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  @@map("webhook_events")
+}
+
+model AppSettings {
+  id            String    @id @default("default")
+  whopWebhookId String?   @map("whop_webhook_id")
+  webhookSecret String?   @map("webhook_secret")
+  webhookUrl    String?   @map("webhook_url")
+  registeredAt  DateTime? @map("registered_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  @@map("app_settings")
+}
