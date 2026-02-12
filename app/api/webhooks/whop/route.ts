@@ -1,60 +1,60 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { Webhook } from "standardwebhooks";
+
+// ── Webhook verification ────────────────────────────────────────────
+// Whop sends the webhook secret in the "webhook-secret" header.
+// We verify by comparing it against our stored secret.
+
+function timingSafeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let mismatch = 0;
+  for (let i = 0; i < a.length; i++) {
+    mismatch |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return mismatch === 0;
+}
+
+async function verifyWebhook(request: NextRequest): Promise<boolean> {
+  const receivedSecret = request.headers.get("webhook-secret");
+  if (!receivedSecret) {
+    console.error("Missing webhook-secret header");
+    return false;
+  }
+
+  const settings = await prisma.appSettings
+    .findUnique({ where: { id: "default" } })
+    .catch(() => null);
+  const expectedSecret =
+    settings?.webhookSecret || process.env.WHOP_WEBHOOK_SECRET;
+
+  if (!expectedSecret) {
+    console.warn("No webhook secret configured — skipping verification");
+    return true;
+  }
+
+  return timingSafeEqual(receivedSecret, expectedSecret);
+}
 
 // ── Webhook handler ─────────────────────────────────────────────────
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.text();
-
-    // Log all headers for debugging (safe to remove later)
-    const allHeaders: Record<string, string> = {};
-    request.headers.forEach((value, key) => {
-      allHeaders[key] = key.toLowerCase().includes("secret") ? "[REDACTED]" : value;
-    });
-    console.log("Webhook headers received:", JSON.stringify(allHeaders, null, 2));
-
-    // Get the webhook secret
-    const settings = await prisma.appSettings
-      .findUnique({ where: { id: "default" } })
-      .catch(() => null);
-    const secret = settings?.webhookSecret || process.env.WHOP_WEBHOOK_SECRET;
-
-    if (!secret) {
-      console.warn("No webhook secret configured — skipping verification");
-    } else {
-      // The standardwebhooks library expects a base64-encoded key.
-      // Whop's SDK does: btoa(process.env.WHOP_WEBHOOK_SECRET)
-      const base64Key = btoa(secret);
-
-      const wh = new Webhook(base64Key);
-
-      // Build headers object from request
-      const headers: Record<string, string> = {};
-      request.headers.forEach((value, key) => {
-        headers[key] = value;
-      });
-
-      try {
-        wh.verify(body, headers);
-      } catch (err) {
-        console.error("Webhook verification failed:", err);
-        return NextResponse.json(
-          { status: "error", message: "Invalid webhook signature" },
-          { status: 401 }
-        );
-      }
+    const isValid = await verifyWebhook(request);
+    if (!isValid) {
+      console.error("Invalid webhook signature");
+      return NextResponse.json(
+        { status: "error", message: "Invalid webhook signature" },
+        { status: 401 }
+      );
     }
 
+    const body = await request.text();
     const payload = JSON.parse(body);
 
-    // Use webhook-id header for idempotency, fall back to payload.id
-    const messageId =
-      request.headers.get("webhook-id") ||
-      request.headers.get("svix-id") ||
-      payload.id;
+    console.log("Webhook received:", payload.type);
 
+    // Use payload.id for idempotency
+    const messageId = payload.id;
     if (!messageId) {
       return NextResponse.json(
         { status: "error", message: "Missing message ID" },
