@@ -35,11 +35,37 @@ async function verifyWebhook(request: NextRequest): Promise<boolean> {
   return timingSafeEqual(receivedSecret, expectedSecret);
 }
 
+// ── Whop v2 Webhook Payload Types ───────────────────────────────────
+//
+// Real payload shape (v2):
+// {
+//   "action": "payment.succeeded",
+//   "api_version": "v2",
+//   "data": {
+//     "id": "pay_xxx",
+//     "product": { "id": "prod_xxx", "title": "...", "name": "..." },
+//     "plan": { "id": "plan_xxx", "internal_notes": "{...}", ... },
+//     "user": { "id": "user_xxx", "name": "...", "email": "..." },
+//     "membership": { "id": "mem_xxx", "email": "...", ... },
+//     "final_amount": 100,
+//     "total": "100.0",
+//     "currency": "usd",
+//     "status": "paid",
+//     "paid_at": 1770890631,          // Unix timestamp (seconds)
+//     "created_at": 1770890625,       // Unix timestamp (seconds)
+//     "refunded_amount": 0,
+//     "refunded_at": null,
+//     "last4": "2750",
+//     "card_brand": "visa",
+//     "billing_reason": "one_time",
+//     ...
+//   }
+// }
+
 // ── Webhook handler ─────────────────────────────────────────────────
 
 export async function POST(request: NextRequest) {
   try {
-    // Clone the request so we can read the body after verification
     const body = await request.text();
 
     const isValid = await verifyWebhook(request);
@@ -53,24 +79,25 @@ export async function POST(request: NextRequest) {
 
     const payload = JSON.parse(body);
 
-    // Log full payload for debugging (safe to remove later)
-    console.log("Webhook payload:", JSON.stringify(payload, null, 2));
+    // Whop v2 uses "action" for the event type
+    const eventType = payload.action || payload.type || "unknown";
+    const eventData = payload.data || {};
 
-    // Whop v1 uses "type", but also handle "action" / "event" as fallbacks
-    const eventType =
-      payload.type || payload.action || payload.event || "unknown";
-    console.log("Webhook event type:", eventType);
+    console.log("Webhook event:", eventType, "| Payment ID:", eventData.id);
 
-    // Use payload.id for idempotency; generate a fallback for test webhooks
+    // Use the payment/resource ID for idempotency
     const messageId =
+      eventData.id ||
       payload.id ||
       `wh_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 
+    // Check if already processed
     const existingEvent = await prisma.webhookEvent.findUnique({
       where: { whopMessageId: messageId },
     });
 
     if (existingEvent?.processedAt) {
+      console.log("Already processed:", messageId);
       return NextResponse.json({ status: "already_processed" });
     }
 
@@ -85,31 +112,24 @@ export async function POST(request: NextRequest) {
       update: {},
     });
 
-    // The event data may be at payload.data or at the top level
-    const eventData = payload.data || payload;
-
-    // Process the event — handle both dot and underscore formats
-    // (e.g. "payment.succeeded" or "payment_succeeded")
+    // Process the event
     try {
       switch (eventType) {
         case "payment.succeeded":
-        case "payment_succeeded":
           await handlePaymentSucceeded(eventData);
           break;
         case "payment.failed":
-        case "payment_failed":
           await handlePaymentFailed(eventData);
           break;
         case "payment.pending":
-        case "payment_pending":
           await handlePaymentPending(eventData);
           break;
         case "refund.created":
-        case "refund_created":
         case "refund.updated":
-        case "refund_updated":
           await handleRefund(eventData);
           break;
+        default:
+          console.log("Unhandled event type:", eventType);
       }
 
       await prisma.webhookEvent.update({
@@ -134,22 +154,47 @@ export async function POST(request: NextRequest) {
   }
 }
 
+// ── Helpers ──────────────────────────────────────────────────────────
+
+/** Convert a Whop Unix timestamp (seconds) to a JS Date */
+function whopDate(ts: number | string | null | undefined): Date {
+  if (!ts) return new Date();
+  const n = typeof ts === "string" ? parseInt(ts, 10) : ts;
+  // Whop timestamps are in seconds; JS Date expects milliseconds
+  return new Date(n * 1000);
+}
+
+/** Parse the amount from Whop — they send both numeric and string forms */
+function whopAmount(data: Record<string, unknown>): number {
+  // Prefer final_amount (numeric), fall back to total (string), then subtotal
+  if (typeof data.final_amount === "number") return data.final_amount;
+  if (typeof data.total === "string") return parseFloat(data.total) || 0;
+  if (typeof data.subtotal === "number") return data.subtotal;
+  return 0;
+}
+
 // ── Event handlers ──────────────────────────────────────────────────
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function handlePaymentSucceeded(data: any) {
   const planId = data.plan?.id;
-  if (!planId) return;
+  if (!planId) {
+    console.warn("payment.succeeded: no plan.id in payload");
+    return;
+  }
 
   const paymentLink = await prisma.paymentLink.findFirst({
     where: { whopPlanId: planId },
     include: { closer: true },
   });
 
-  if (!paymentLink) return;
+  if (!paymentLink) {
+    console.warn("payment.succeeded: no payment link found for plan", planId);
+    return;
+  }
 
   const closer = paymentLink.closer;
-  const paymentAmount = data.creator_total || data.amount || 0;
+  const paymentAmount = whopAmount(data);
 
   let commissionAmount = 0;
   if (closer.commissionType === "percentage") {
@@ -170,15 +215,16 @@ async function handlePaymentSucceeded(data: any) {
       paymentLinkId: paymentLink.id,
       whopPlanId: planId,
       whopProductId: data.product?.id,
-      productName: data.product?.title || paymentLink.productName,
-      customerEmail: data.user?.email,
+      productName:
+        data.product?.title || data.product?.name || paymentLink.productName,
+      customerEmail: data.user?.email || data.membership?.email,
       customerName: data.user?.name,
       customerId: data.user?.id,
       membershipId: data.membership?.id,
       amount: paymentAmount,
       currency: data.currency || "usd",
       status: "succeeded",
-      paidAt: data.paid_at ? new Date(data.paid_at) : new Date(),
+      paidAt: whopDate(data.paid_at),
       installmentNumber: existingPayments + 1,
       isRecurring: paymentLink.planType !== "one_time",
       commissionAmount,
@@ -186,10 +232,14 @@ async function handlePaymentSucceeded(data: any) {
     },
     update: {
       status: "succeeded",
-      paidAt: data.paid_at ? new Date(data.paid_at) : new Date(),
+      paidAt: whopDate(data.paid_at),
       whopWebhookData: data,
     },
   });
+
+  console.log(
+    `Payment recorded: $${paymentAmount} from ${data.user?.name || "unknown"} via plan ${planId}`
+  );
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -210,7 +260,7 @@ async function handlePaymentFailed(data: any) {
       closerId: paymentLink.closerId,
       paymentLinkId: paymentLink.id,
       whopPlanId: planId,
-      amount: data.creator_total || data.amount || 0,
+      amount: whopAmount(data),
       status: "failed",
       whopWebhookData: data,
     },
@@ -239,7 +289,7 @@ async function handlePaymentPending(data: any) {
       closerId: paymentLink.closerId,
       paymentLinkId: paymentLink.id,
       whopPlanId: planId,
-      amount: data.creator_total || data.amount || 0,
+      amount: whopAmount(data),
       status: "pending",
       whopWebhookData: data,
     },
@@ -252,15 +302,23 @@ async function handlePaymentPending(data: any) {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function handleRefund(data: any) {
-  const paymentId = data.payment?.id;
+  // For refunds, the payment ID may be at data.payment.id or data.id
+  const paymentId = data.payment?.id || data.id;
   if (!paymentId) return;
+
+  const refundAmount =
+    typeof data.refunded_amount === "number"
+      ? data.refunded_amount
+      : typeof data.amount === "number"
+        ? data.amount
+        : 0;
 
   await prisma.payment.updateMany({
     where: { whopPaymentId: paymentId },
     data: {
       status: "refunded",
-      refundedAt: new Date(),
-      refundAmount: data.amount || 0,
+      refundedAt: data.refunded_at ? whopDate(data.refunded_at) : new Date(),
+      refundAmount,
     },
   });
 }
