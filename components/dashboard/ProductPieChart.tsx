@@ -72,6 +72,8 @@ export function ProductPieChart({ from, to }: ProductPieChartProps) {
                   fontFamily: "JetBrains Mono",
                   fontSize: "12px",
                 }}
+                itemStyle={{ color: "#E0E0E0" }}
+                labelStyle={{ color: "#9CA3AF" }}
                 formatter={(value: number | undefined) => [formatCurrency(value ?? 0), "Revenue"]}
               />
             </PieChart>

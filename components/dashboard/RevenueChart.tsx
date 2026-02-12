@@ -88,6 +88,8 @@ export function RevenueChart({ from, to }: RevenueChartProps) {
                 fontFamily: "JetBrains Mono",
                 fontSize: "12px",
               }}
+              itemStyle={{ color: "#E0E0E0" }}
+              labelStyle={{ color: "#9CA3AF" }}
               formatter={(value: number | undefined) => [
                 `$${(value ?? 0).toLocaleString()}`,
                 "Revenue",
