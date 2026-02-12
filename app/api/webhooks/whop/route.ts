@@ -164,11 +164,11 @@ function whopDate(ts: number | string | null | undefined): Date {
   return new Date(n * 1000);
 }
 
-/** Parse the amount from Whop — they send both numeric and string forms */
+/** Parse the amount from Whop — use "total" (string) as source of truth */
 function whopAmount(data: Record<string, unknown>): number {
-  // Prefer final_amount (numeric), fall back to total (string), then subtotal
-  if (typeof data.final_amount === "number") return data.final_amount;
   if (typeof data.total === "string") return parseFloat(data.total) || 0;
+  if (typeof data.total === "number") return data.total;
+  if (typeof data.final_amount === "number") return data.final_amount;
   if (typeof data.subtotal === "number") return data.subtotal;
   return 0;
 }
