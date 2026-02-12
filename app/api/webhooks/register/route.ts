@@ -16,8 +16,8 @@ export async function POST() {
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const webhook = await (whopClient.webhooks as any).create({
-      company_id: COMPANY_ID,
       url: webhookUrl,
+      resource_id: COMPANY_ID,
     });
 
     // Store webhook info
