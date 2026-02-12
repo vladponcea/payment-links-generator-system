@@ -59,7 +59,7 @@ export default function GenerateLinkPage() {
   const [totalAmount, setTotalAmount] = useState("");
   const [numberOfPayments, setNumberOfPayments] = useState("2");
   const [initialPrice, setInitialPrice] = useState("");
-  const [installmentPrice, setInstallmentPrice] = useState("");
+  const [remainingAmount, setRemainingAmount] = useState("");
 
   const billingPeriodDays =
     billingInterval === "custom" ? parseInt(customDays) || 30 : parseInt(billingInterval);
@@ -94,12 +94,19 @@ export default function GenerateLinkPage() {
     return Math.round((total / numPay) * 100) / 100;
   }, [totalAmount, numberOfPayments]);
 
+  const getCustomInstallmentPrice = useCallback(() => {
+    const remaining = parseFloat(remainingAmount) || 0;
+    const numPay = parseInt(numberOfPayments) || 2;
+    const numInstallments = numPay - 1;
+    if (numInstallments <= 0 || remaining <= 0) return 0;
+    return Math.round((remaining / numInstallments) * 100) / 100;
+  }, [remainingAmount, numberOfPayments]);
+
   const getCustomTotal = useCallback(() => {
     const init = parseFloat(initialPrice) || 0;
-    const inst = parseFloat(installmentPrice) || 0;
-    const numPay = parseInt(numberOfPayments) || 2;
-    return init + inst * (numPay - 1);
-  }, [initialPrice, installmentPrice, numberOfPayments]);
+    const remaining = parseFloat(remainingAmount) || 0;
+    return init + remaining;
+  }, [initialPrice, remainingAmount]);
 
   const handleGenerate = async () => {
     if (!closerId || !productId) {
@@ -156,14 +163,20 @@ export default function GenerateLinkPage() {
           body.totalAmount = total;
         } else {
           const init = parseFloat(initialPrice);
-          const inst = parseFloat(installmentPrice);
-          if (!init || init <= 0 || !inst || inst <= 0) {
+          const remaining = parseFloat(remainingAmount);
+          if (!init || init <= 0 || !remaining || remaining <= 0) {
             toast.error("Please enter valid payment amounts");
             setGenerating(false);
             return;
           }
+          const installment = getCustomInstallmentPrice();
+          if (installment <= 0) {
+            toast.error("Could not calculate installment amount");
+            setGenerating(false);
+            return;
+          }
           body.initialPrice = init;
-          body.installmentPrice = inst;
+          body.installmentPrice = installment;
         }
       }
 
@@ -195,7 +208,7 @@ export default function GenerateLinkPage() {
     setRenewalPrice("");
     setTotalAmount("");
     setInitialPrice("");
-    setInstallmentPrice("");
+    setRemainingAmount("");
     setTitle("");
     setDescription("");
   };
@@ -452,15 +465,25 @@ export default function GenerateLinkPage() {
                   step="0.01"
                 />
                 <Input
-                  label={`Remaining Payments (${parseInt(numberOfPayments) - 1 || 1} × each)`}
+                  label="Remaining Amount"
                   prefix="$"
                   type="number"
                   placeholder="0.00"
-                  value={installmentPrice}
-                  onChange={(e) => setInstallmentPrice(e.target.value)}
+                  value={remainingAmount}
+                  onChange={(e) => setRemainingAmount(e.target.value)}
                   min="0"
                   step="0.01"
                 />
+
+                {parseFloat(remainingAmount) > 0 && parseInt(numberOfPayments) >= 2 && (
+                  <div className="p-3 bg-cyber-cyan/5 border border-cyber-cyan/20 rounded-lg">
+                    <p className="text-sm text-cyber-cyan font-[family-name:var(--font-jetbrains)]">
+                      Remaining {formatCurrency(parseFloat(remainingAmount))} split across{" "}
+                      {parseInt(numberOfPayments) - 1} payments ={" "}
+                      <strong>{formatCurrency(getCustomInstallmentPrice())}</strong> each
+                    </p>
+                  </div>
+                )}
 
                 <div className="flex items-start gap-2 p-3 bg-cyber-purple/5 border border-cyber-purple/20 rounded-lg">
                   <Info className="w-4 h-4 text-cyber-purple flex-shrink-0 mt-0.5" />
@@ -471,11 +494,11 @@ export default function GenerateLinkPage() {
                 </div>
 
                 {parseFloat(initialPrice) > 0 &&
-                  parseFloat(installmentPrice) > 0 &&
+                  parseFloat(remainingAmount) > 0 &&
                   parseInt(numberOfPayments) >= 2 && (
                     <SplitTimeline
                       initialPrice={parseFloat(initialPrice)}
-                      installmentPrice={parseFloat(installmentPrice)}
+                      installmentPrice={getCustomInstallmentPrice()}
                       numberOfPayments={parseInt(numberOfPayments)}
                       billingPeriodDays={billingPeriodDays}
                     />
