@@ -1,69 +1,91 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0);
+    const searchParams = request.nextUrl.searchParams;
+    const from = searchParams.get("from");
+    const to = searchParams.get("to");
 
-    // Total revenue (all time)
-    const totalRevenueResult = await prisma.payment.aggregate({
+    // Build date filter
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const dateFilter: any = {};
+    if (from) {
+      const d = new Date(from);
+      if (!isNaN(d.getTime())) dateFilter.gte = d;
+    }
+    if (to) {
+      const d = new Date(to);
+      if (!isNaN(d.getTime())) dateFilter.lte = d;
+    }
+
+    const hasDateFilter = Object.keys(dateFilter).length > 0;
+
+    // All-time revenue (always unfiltered)
+    const allTimeResult = await prisma.payment.aggregate({
       where: { status: "succeeded" },
       _sum: { amount: true },
       _count: true,
     });
 
-    // This month's revenue
-    const monthlyRevenueResult = await prisma.payment.aggregate({
+    // Revenue for selected period
+    const periodResult = await prisma.payment.aggregate({
       where: {
         status: "succeeded",
-        paidAt: { gte: startOfMonth },
+        ...(hasDateFilter ? { paidAt: dateFilter } : {}),
       },
       _sum: { amount: true },
       _count: true,
     });
 
-    // Last month's revenue (for comparison)
-    const lastMonthRevenueResult = await prisma.payment.aggregate({
-      where: {
-        status: "succeeded",
-        paidAt: { gte: startOfLastMonth, lte: endOfLastMonth },
-      },
-      _sum: { amount: true },
-      _count: true,
-    });
+    // Calculate comparison period (same duration, immediately prior)
+    let prevResult = { _sum: { amount: null as number | null }, _count: 0 };
+    if (hasDateFilter && dateFilter.gte) {
+      const start = new Date(dateFilter.gte);
+      const end = dateFilter.lte ? new Date(dateFilter.lte) : new Date();
+      const duration = end.getTime() - start.getTime();
+      const prevStart = new Date(start.getTime() - duration);
+      const prevEnd = new Date(start.getTime() - 1);
 
-    const totalRevenue = totalRevenueResult._sum.amount || 0;
-    const totalSales = totalRevenueResult._count;
-    const monthlyRevenue = monthlyRevenueResult._sum.amount || 0;
-    const monthlySales = monthlyRevenueResult._count;
-    const lastMonthRevenue = lastMonthRevenueResult._sum.amount || 0;
-    const lastMonthSales = lastMonthRevenueResult._count;
+      prevResult = await prisma.payment.aggregate({
+        where: {
+          status: "succeeded",
+          paidAt: { gte: prevStart, lte: prevEnd },
+        },
+        _sum: { amount: true },
+        _count: true,
+      });
+    }
 
-    const averageDealSize = totalSales > 0 ? totalRevenue / totalSales : 0;
+    const allTimeRevenue = allTimeResult._sum.amount || 0;
+    const allTimeSales = allTimeResult._count;
+    const periodRevenue = periodResult._sum.amount || 0;
+    const periodSales = periodResult._count;
+    const prevRevenue = prevResult._sum.amount || 0;
+    const prevSales = prevResult._count;
+
+    const averageDealSize = periodSales > 0 ? periodRevenue / periodSales : 0;
 
     const revenueChange =
-      lastMonthRevenue > 0
-        ? ((monthlyRevenue - lastMonthRevenue) / lastMonthRevenue) * 100
-        : monthlyRevenue > 0
+      prevRevenue > 0
+        ? ((periodRevenue - prevRevenue) / prevRevenue) * 100
+        : periodRevenue > 0
         ? 100
         : 0;
 
     const salesChange =
-      lastMonthSales > 0
-        ? ((monthlySales - lastMonthSales) / lastMonthSales) * 100
-        : monthlySales > 0
+      prevSales > 0
+        ? ((periodSales - prevSales) / prevSales) * 100
+        : periodSales > 0
         ? 100
         : 0;
 
     return NextResponse.json({
       success: true,
       data: {
-        totalRevenue,
-        monthlyRevenue,
-        totalSales,
+        totalRevenue: allTimeRevenue,
+        monthlyRevenue: periodRevenue,
+        totalSales: hasDateFilter ? periodSales : allTimeSales,
         averageDealSize,
         revenueChange: Math.round(revenueChange * 10) / 10,
         salesChange: Math.round(salesChange * 10) / 10,

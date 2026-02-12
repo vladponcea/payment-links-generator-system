@@ -166,11 +166,6 @@ export default function ClosersPage() {
     }
   };
 
-  const totalTeamRevenue = closers.reduce(
-    (sum, c) => sum + (c.totalRevenue || 0),
-    0
-  );
-
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Header */}
@@ -225,11 +220,6 @@ export default function ClosersPage() {
           {closers
             .sort((a, b) => (b.totalRevenue || 0) - (a.totalRevenue || 0))
             .map((closer, index) => {
-              const revenueShare =
-                totalTeamRevenue > 0
-                  ? ((closer.totalRevenue || 0) / totalTeamRevenue) * 100
-                  : 0;
-
               return (
                 <Card
                   key={closer.id}
@@ -313,22 +303,6 @@ export default function ClosersPage() {
                       <p className="font-[family-name:var(--font-jetbrains)] text-sm font-bold text-cyber-green">
                         {formatCurrency(closer.totalCommission || 0)}
                       </p>
-                    </div>
-                  </div>
-
-                  {/* Revenue share bar */}
-                  <div>
-                    <div className="flex items-center justify-between text-xs mb-1">
-                      <span className="text-cyber-muted">Revenue Share</span>
-                      <span className="font-[family-name:var(--font-jetbrains)] text-cyber-cyan">
-                        {revenueShare.toFixed(1)}%
-                      </span>
-                    </div>
-                    <div className="h-1.5 bg-cyber-black rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-gradient-to-r from-cyber-cyan to-cyber-purple rounded-full transition-all duration-500"
-                        style={{ width: `${Math.max(revenueShare, 2)}%` }}
-                      />
                     </div>
                   </div>
 

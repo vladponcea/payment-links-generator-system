@@ -14,19 +14,26 @@ import {
 } from "recharts";
 import type { RevenueDataPoint } from "@/lib/types";
 
-export function RevenueChart() {
+interface RevenueChartProps {
+  from: string;
+  to: string;
+}
+
+export function RevenueChart({ from, to }: RevenueChartProps) {
   const [data, setData] = useState<RevenueDataPoint[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/analytics/revenue-over-time?days=30")
+    setLoading(true);
+    const params = new URLSearchParams({ from, to });
+    fetch(`/api/analytics/revenue-over-time?${params}`)
       .then((res) => res.json())
       .then((result) => {
         if (result.success) setData(result.data);
       })
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, []);
+  }, [from, to]);
 
   return (
     <Card className="col-span-2">

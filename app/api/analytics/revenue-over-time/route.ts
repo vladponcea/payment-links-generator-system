@@ -4,14 +4,36 @@ import { prisma } from "@/lib/prisma";
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
+    const from = searchParams.get("from");
+    const to = searchParams.get("to");
     const days = Math.min(365, Math.max(1, parseInt(searchParams.get("days") || "30") || 30));
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() - days);
+
+    // Determine date range
+    let startDate: Date;
+    let endDate: Date;
+
+    if (from) {
+      startDate = new Date(from);
+      if (isNaN(startDate.getTime())) {
+        startDate = new Date();
+        startDate.setDate(startDate.getDate() - days);
+      }
+    } else {
+      startDate = new Date();
+      startDate.setDate(startDate.getDate() - days);
+    }
+
+    if (to) {
+      endDate = new Date(to);
+      if (isNaN(endDate.getTime())) endDate = new Date();
+    } else {
+      endDate = new Date();
+    }
 
     const payments = await prisma.payment.findMany({
       where: {
         status: "succeeded",
-        paidAt: { gte: startDate },
+        paidAt: { gte: startDate, lte: endDate },
       },
       select: {
         amount: true,
@@ -24,7 +46,7 @@ export async function GET(request: NextRequest) {
     const revenueByDate: Record<string, number> = {};
 
     // Fill all dates in range with 0
-    for (let d = new Date(startDate); d <= new Date(); d.setDate(d.getDate() + 1)) {
+    for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
       const key = d.toISOString().split("T")[0];
       revenueByDate[key] = 0;
     }

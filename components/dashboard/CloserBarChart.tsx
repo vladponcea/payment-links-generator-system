@@ -14,19 +14,26 @@ import {
 } from "recharts";
 import type { CloserRevenue } from "@/lib/types";
 
-export function CloserBarChart() {
+interface CloserBarChartProps {
+  from: string;
+  to: string;
+}
+
+export function CloserBarChart({ from, to }: CloserBarChartProps) {
   const [data, setData] = useState<CloserRevenue[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/analytics/by-closer")
+    setLoading(true);
+    const params = new URLSearchParams({ from, to });
+    fetch(`/api/analytics/by-closer?${params}`)
       .then((res) => res.json())
       .then((result) => {
         if (result.success) setData(result.data);
       })
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, []);
+  }, [from, to]);
 
   return (
     <Card>

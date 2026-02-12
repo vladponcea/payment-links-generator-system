@@ -9,19 +9,26 @@ import type { ProductRevenue } from "@/lib/types";
 
 const COLORS = ["#00F0FF", "#A855F7", "#00FF88", "#FFD700", "#FF3366", "#6366F1"];
 
-export function ProductPieChart() {
+interface ProductPieChartProps {
+  from: string;
+  to: string;
+}
+
+export function ProductPieChart({ from, to }: ProductPieChartProps) {
   const [data, setData] = useState<ProductRevenue[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/analytics/by-product")
+    setLoading(true);
+    const params = new URLSearchParams({ from, to });
+    fetch(`/api/analytics/by-product?${params}`)
       .then((res) => res.json())
       .then((result) => {
         if (result.success) setData(result.data);
       })
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, []);
+  }, [from, to]);
 
   return (
     <Card>

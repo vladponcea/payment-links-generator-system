@@ -22,19 +22,26 @@ interface RecentPayment {
   } | null;
 }
 
-export function RecentPayments() {
+interface RecentPaymentsProps {
+  from: string;
+  to: string;
+}
+
+export function RecentPayments({ from, to }: RecentPaymentsProps) {
   const [payments, setPayments] = useState<RecentPayment[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/payments?limit=10")
+    setLoading(true);
+    const params = new URLSearchParams({ limit: "10", from, to });
+    fetch(`/api/payments?${params}`)
       .then((res) => res.json())
       .then((data) => {
         if (data.success) setPayments(data.data);
       })
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, []);
+  }, [from, to]);
 
   return (
     <Card className="col-span-full">

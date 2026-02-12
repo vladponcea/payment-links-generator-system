@@ -14,19 +14,27 @@ import {
 import { useEffect, useState } from "react";
 import type { DashboardStats } from "@/lib/types";
 
-export function StatsCards() {
+interface StatsCardsProps {
+  from: string;
+  to: string;
+  label: string;
+}
+
+export function StatsCards({ from, to, label }: StatsCardsProps) {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/analytics/overview")
+    setLoading(true);
+    const params = new URLSearchParams({ from, to });
+    fetch(`/api/analytics/overview?${params}`)
       .then((res) => res.json())
       .then((data) => {
         if (data.success) setStats(data.data);
       })
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, []);
+  }, [from, to]);
 
   if (loading) {
     return (
@@ -49,7 +57,7 @@ export function StatsCards() {
       change: stats.revenueChange,
     },
     {
-      title: "Revenue This Month",
+      title: `Revenue (${label})`,
       value: formatCurrency(stats.monthlyRevenue),
       icon: TrendingUp,
       color: "cyber-green",
@@ -103,7 +111,7 @@ export function StatsCards() {
                     >
                       {Math.abs(card.change)}%
                     </span>
-                    <span className="text-xs text-cyber-muted">vs last month</span>
+                    <span className="text-xs text-cyber-muted">vs prev period</span>
                   </div>
                 )}
               </div>
