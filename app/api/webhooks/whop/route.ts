@@ -1,95 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-
-// ── Standard Webhooks signature verification ────────────────────────
-// Whop follows the Standard Webhooks spec:
-//   Headers: webhook-id, webhook-signature, webhook-timestamp
-//   Signature: HMAC-SHA256(secret, "${msg_id}.${timestamp}.${body}")
-//   Format: "v1,<base64>"
-
-const encoder = new TextEncoder();
-
-async function verifyWebhookSignature(
-  body: string,
-  headers: {
-    id: string | null;
-    signature: string | null;
-    timestamp: string | null;
-  }
-): Promise<boolean> {
-  const secret =
-    (await prisma.appSettings
-      .findUnique({ where: { id: "default" } })
-      .then((s) => s?.webhookSecret)) || process.env.WHOP_WEBHOOK_SECRET;
-
-  if (!secret) {
-    console.warn(
-      "No webhook secret configured — skipping signature verification"
-    );
-    return true;
-  }
-
-  const { id, signature, timestamp } = headers;
-  if (!id || !signature || !timestamp) {
-    console.error("Missing webhook headers:", { id: !!id, signature: !!signature, timestamp: !!timestamp });
-    return false;
-  }
-
-  // Reject old timestamps (tolerance: 5 minutes)
-  const ts = parseInt(timestamp);
-  if (isNaN(ts) || Math.abs(Date.now() / 1000 - ts) > 300) {
-    console.error("Webhook timestamp out of tolerance");
-    return false;
-  }
-
-  // The signed content is: "${msg_id}.${timestamp}.${body}"
-  const signedContent = `${id}.${timestamp}.${body}`;
-
-  // The secret from Whop is the raw key string.
-  // Import as HMAC-SHA256 key.
-  const keyData = encoder.encode(secret);
-  const cryptoKey = await crypto.subtle.importKey(
-    "raw",
-    keyData,
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"]
-  );
-
-  const sig = await crypto.subtle.sign(
-    "HMAC",
-    cryptoKey,
-    encoder.encode(signedContent)
-  );
-
-  const expectedBase64 = btoa(
-    String.fromCharCode(...new Uint8Array(sig))
-  );
-
-  // The webhook-signature header can contain multiple signatures:
-  // "v1,<base64> v1,<base64>"
-  // We check if any match.
-  const signatures = signature.split(" ");
-  for (const s of signatures) {
-    const parts = s.split(",");
-    if (parts.length < 2) continue;
-    const version = parts[0];
-    const sigValue = parts.slice(1).join(","); // base64 can't have commas, but be safe
-
-    if (version !== "v1") continue;
-
-    // Constant-time comparison
-    if (sigValue.length !== expectedBase64.length) continue;
-    let mismatch = 0;
-    for (let i = 0; i < sigValue.length; i++) {
-      mismatch |= sigValue.charCodeAt(i) ^ expectedBase64.charCodeAt(i);
-    }
-    if (mismatch === 0) return true;
-  }
-
-  console.error("Webhook signature mismatch");
-  return false;
-}
+import { Webhook } from "standardwebhooks";
 
 // ── Webhook handler ─────────────────────────────────────────────────
 
@@ -97,29 +8,53 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.text();
 
-    // Standard Webhooks headers
-    const webhookId = request.headers.get("webhook-id");
-    const webhookSignature = request.headers.get("webhook-signature");
-    const webhookTimestamp = request.headers.get("webhook-timestamp");
-
-    const isValid = await verifyWebhookSignature(body, {
-      id: webhookId,
-      signature: webhookSignature,
-      timestamp: webhookTimestamp,
+    // Log all headers for debugging (safe to remove later)
+    const allHeaders: Record<string, string> = {};
+    request.headers.forEach((value, key) => {
+      allHeaders[key] = key.toLowerCase().includes("secret") ? "[REDACTED]" : value;
     });
+    console.log("Webhook headers received:", JSON.stringify(allHeaders, null, 2));
 
-    if (!isValid) {
-      console.error("Invalid webhook signature");
-      return NextResponse.json(
-        { status: "error", message: "Invalid webhook signature" },
-        { status: 401 }
-      );
+    // Get the webhook secret
+    const settings = await prisma.appSettings
+      .findUnique({ where: { id: "default" } })
+      .catch(() => null);
+    const secret = settings?.webhookSecret || process.env.WHOP_WEBHOOK_SECRET;
+
+    if (!secret) {
+      console.warn("No webhook secret configured — skipping verification");
+    } else {
+      // The standardwebhooks library expects a base64-encoded key.
+      // Whop's SDK does: btoa(process.env.WHOP_WEBHOOK_SECRET)
+      const base64Key = btoa(secret);
+
+      const wh = new Webhook(base64Key);
+
+      // Build headers object from request
+      const headers: Record<string, string> = {};
+      request.headers.forEach((value, key) => {
+        headers[key] = value;
+      });
+
+      try {
+        wh.verify(body, headers);
+      } catch (err) {
+        console.error("Webhook verification failed:", err);
+        return NextResponse.json(
+          { status: "error", message: "Invalid webhook signature" },
+          { status: 401 }
+        );
+      }
     }
 
     const payload = JSON.parse(body);
 
-    // Use webhook-id header for idempotency (more reliable than payload.id)
-    const messageId = webhookId || payload.id;
+    // Use webhook-id header for idempotency, fall back to payload.id
+    const messageId =
+      request.headers.get("webhook-id") ||
+      request.headers.get("svix-id") ||
+      payload.id;
+
     if (!messageId) {
       return NextResponse.json(
         { status: "error", message: "Missing message ID" },
@@ -193,7 +128,6 @@ async function handlePaymentSucceeded(data: any) {
   const planId = data.plan?.id;
   if (!planId) return;
 
-  // Find our payment link
   const paymentLink = await prisma.paymentLink.findFirst({
     where: { whopPlanId: planId },
     include: { closer: true },
@@ -204,7 +138,6 @@ async function handlePaymentSucceeded(data: any) {
   const closer = paymentLink.closer;
   const paymentAmount = data.creator_total || data.amount || 0;
 
-  // Calculate commission
   let commissionAmount = 0;
   if (closer.commissionType === "percentage") {
     commissionAmount = paymentAmount * (closer.commissionValue / 100);
@@ -212,12 +145,10 @@ async function handlePaymentSucceeded(data: any) {
     commissionAmount = closer.commissionValue;
   }
 
-  // Determine installment number
   const existingPayments = await prisma.payment.count({
     where: { paymentLinkId: paymentLink.id, status: "succeeded" },
   });
 
-  // Use upsert to prevent race condition on duplicate webhooks
   await prisma.payment.upsert({
     where: { whopPaymentId: data.id },
     create: {
