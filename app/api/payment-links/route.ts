@@ -179,7 +179,7 @@ export async function POST(request: NextRequest) {
           planParams.initial_price = initialPrice;
           planParams.renewal_price = installmentPrice;
           planParams.billing_period = billingPeriodDays;
-          planParams.trial_days = billingPeriodDays;
+          planParams.trial_period_days = billingPeriodDays;
           planParams.split_pay_required_payments = numberOfPayments;
 
           const calcTotal =
