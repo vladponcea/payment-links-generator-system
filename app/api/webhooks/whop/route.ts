@@ -39,6 +39,9 @@ async function verifyWebhook(request: NextRequest): Promise<boolean> {
 
 export async function POST(request: NextRequest) {
   try {
+    // Clone the request so we can read the body after verification
+    const body = await request.text();
+
     const isValid = await verifyWebhook(request);
     if (!isValid) {
       console.error("Invalid webhook signature");
@@ -48,19 +51,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const body = await request.text();
     const payload = JSON.parse(body);
 
-    console.log("Webhook received:", payload.type);
+    // Log full payload for debugging (safe to remove later)
+    console.log("Webhook payload:", JSON.stringify(payload, null, 2));
 
-    // Use payload.id for idempotency
-    const messageId = payload.id;
-    if (!messageId) {
-      return NextResponse.json(
-        { status: "error", message: "Missing message ID" },
-        { status: 400 }
-      );
-    }
+    // Whop v1 uses "type", but also handle "action" / "event" as fallbacks
+    const eventType =
+      payload.type || payload.action || payload.event || "unknown";
+    console.log("Webhook event type:", eventType);
+
+    // Use payload.id for idempotency; generate a fallback for test webhooks
+    const messageId =
+      payload.id ||
+      `wh_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 
     const existingEvent = await prisma.webhookEvent.findUnique({
       where: { whopMessageId: messageId },
@@ -75,27 +79,36 @@ export async function POST(request: NextRequest) {
       where: { whopMessageId: messageId },
       create: {
         whopMessageId: messageId,
-        eventType: payload.type || "unknown",
+        eventType: eventType,
         payload: payload,
       },
       update: {},
     });
 
-    // Process the event
+    // The event data may be at payload.data or at the top level
+    const eventData = payload.data || payload;
+
+    // Process the event — handle both dot and underscore formats
+    // (e.g. "payment.succeeded" or "payment_succeeded")
     try {
-      switch (payload.type) {
+      switch (eventType) {
         case "payment.succeeded":
-          await handlePaymentSucceeded(payload.data);
+        case "payment_succeeded":
+          await handlePaymentSucceeded(eventData);
           break;
         case "payment.failed":
-          await handlePaymentFailed(payload.data);
+        case "payment_failed":
+          await handlePaymentFailed(eventData);
           break;
         case "payment.pending":
-          await handlePaymentPending(payload.data);
+        case "payment_pending":
+          await handlePaymentPending(eventData);
           break;
         case "refund.created":
+        case "refund_created":
         case "refund.updated":
-          await handleRefund(payload.data);
+        case "refund_updated":
+          await handleRefund(eventData);
           break;
       }
 
