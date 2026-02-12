@@ -172,11 +172,14 @@ export async function POST(request: NextRequest) {
       }
       case "split_pay": {
         if (splitMode === "custom") {
-          // Custom split: different first payment
+          // Custom split: different first payment.
+          // Add a free trial matching the billing interval so Whop only
+          // charges the initial_price on day 1 (not initial + first renewal).
           planParams.plan_type = "renewal";
           planParams.initial_price = initialPrice;
           planParams.renewal_price = installmentPrice;
           planParams.billing_period = billingPeriodDays;
+          planParams.trial_days = billingPeriodDays;
           planParams.split_pay_required_payments = numberOfPayments;
 
           const calcTotal =
