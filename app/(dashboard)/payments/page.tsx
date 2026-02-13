@@ -213,6 +213,22 @@ export default function PaymentsPage() {
                 ))
               )}
             </tbody>
+            {!loading && payments.length > 0 && (
+              <tfoot>
+                <tr className="border-t-2 border-cyber-cyan/30 bg-cyber-dark">
+                  <td colSpan={5} className="py-3 px-4 text-xs text-cyber-muted uppercase tracking-wider font-semibold text-right">
+                    Totals ({payments.length} {payments.length === 1 ? "payment" : "payments"})
+                  </td>
+                  <td className="py-3 px-4 text-right font-[family-name:var(--font-jetbrains)] text-sm font-bold text-white">
+                    {formatCurrency(payments.reduce((sum, p) => sum + p.amount, 0))}
+                  </td>
+                  <td className="py-3 px-4 text-right font-[family-name:var(--font-jetbrains)] text-sm font-bold text-cyber-green">
+                    {formatCurrency(payments.reduce((sum, p) => sum + (p.commissionAmount || 0), 0))}
+                  </td>
+                  <td colSpan={2} />
+                </tr>
+              </tfoot>
+            )}
           </table>
         </div>
       </Card>
