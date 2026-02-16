@@ -78,6 +78,8 @@ export async function POST(request: NextRequest) {
       title,
       description,
       amount,
+      downPaymentAmount,
+      packageAmount,
       renewalPrice,
       billingPeriodDays,
       splitMode,
@@ -109,6 +111,14 @@ export async function POST(request: NextRequest) {
     if (paymentType === "one_time") {
       const err = validatePositive(amount, "Amount");
       if (err) return NextResponse.json({ success: false, error: err }, { status: 400 });
+    } else if (paymentType === "down_payment") {
+      const err1 = validatePositive(downPaymentAmount, "Down payment amount");
+      const err2 = validatePositive(packageAmount, "Package amount");
+      if (err1) return NextResponse.json({ success: false, error: err1 }, { status: 400 });
+      if (err2) return NextResponse.json({ success: false, error: err2 }, { status: 400 });
+      if (Number(downPaymentAmount) >= Number(packageAmount)) {
+        return NextResponse.json({ success: false, error: "Down payment must be less than the total package amount" }, { status: 400 });
+      }
     } else if (paymentType === "renewal") {
       const err = validatePositive(renewalPrice, "Renewal price");
       if (err) return NextResponse.json({ success: false, error: err }, { status: 400 });
@@ -173,6 +183,16 @@ export async function POST(request: NextRequest) {
         dbTotalAmount = amount;
         dbInitialPrice = amount;
         internalNotes.link_type = "one_time";
+        break;
+      }
+      case "down_payment": {
+        planParams.plan_type = "one_time";
+        planParams.initial_price = downPaymentAmount;
+        dbTotalAmount = packageAmount;
+        dbInitialPrice = downPaymentAmount;
+        internalNotes.link_type = "down_payment";
+        internalNotes.down_payment_amount = downPaymentAmount;
+        internalNotes.package_amount = packageAmount;
         break;
       }
       case "renewal": {

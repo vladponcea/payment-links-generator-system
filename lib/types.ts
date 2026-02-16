@@ -13,7 +13,7 @@ export interface WhopProduct {
   created_at?: string;
 }
 
-export type PaymentType = "one_time" | "renewal" | "split_pay";
+export type PaymentType = "one_time" | "down_payment" | "renewal" | "split_pay";
 export type SplitMode = "equal" | "custom";
 
 export interface PaymentLinkFormData {
@@ -26,6 +26,10 @@ export interface PaymentLinkFormData {
 
   // One-time
   amount?: number;
+
+  // Down payment
+  downPaymentAmount?: number;
+  packageAmount?: number;
 
   // Recurring
   renewalPrice?: number;

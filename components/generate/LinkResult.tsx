@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Check, Copy, ExternalLink, RotateCcw } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import toast from "react-hot-toast";
 
 interface LinkResultProps {
@@ -14,7 +14,7 @@ interface LinkResultProps {
 export function LinkResult({ url, onReset }: LinkResultProps) {
   const [copied, setCopied] = useState(false);
 
-  const handleCopy = async () => {
+  const handleCopy = useCallback(async () => {
     try {
       await navigator.clipboard.writeText(url);
       setCopied(true);
@@ -23,7 +23,11 @@ export function LinkResult({ url, onReset }: LinkResultProps) {
     } catch {
       toast.error("Failed to copy link");
     }
-  };
+  }, [url]);
+
+  useEffect(() => {
+    handleCopy();
+  }, [handleCopy]);
 
   return (
     <Card glow className="animate-fade-in text-center max-w-xl mx-auto">

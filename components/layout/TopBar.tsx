@@ -7,6 +7,7 @@ const pageTitles: Record<string, string> = {
   "/generate": "Generate Payment Link",
   "/links": "Payment Links",
   "/payments": "Payments",
+  "/down-payments": "Down Payments",
   "/closers": "Closers",
   "/settings": "Settings",
 };

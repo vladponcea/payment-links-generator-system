@@ -48,6 +48,8 @@ export function getPlanTypeLabel(type: string): string {
   switch (type) {
     case "one_time":
       return "One-Time";
+    case "down_payment":
+      return "Down Payment";
     case "renewal":
       return "Recurring";
     case "split_pay":

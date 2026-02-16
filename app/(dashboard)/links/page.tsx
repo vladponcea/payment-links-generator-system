@@ -127,6 +127,7 @@ export default function PaymentLinksPage() {
   const getPlanTypeBadgeVariant = (type: string) => {
     switch (type) {
       case "one_time": return "cyan" as const;
+      case "down_payment": return "yellow" as const;
       case "renewal": return "purple" as const;
       case "split_pay": return "green" as const;
       case "custom_split": return "yellow" as const;
@@ -175,6 +176,7 @@ export default function PaymentLinksPage() {
             options={[
               { value: "", label: "All Types" },
               { value: "one_time", label: "One-Time" },
+              { value: "down_payment", label: "Down Payment" },
               { value: "renewal", label: "Recurring" },
               { value: "split_pay", label: "Split Pay" },
               { value: "custom_split", label: "Custom Split" },

@@ -53,6 +53,10 @@ export default function GenerateLinkPage() {
   // One-time
   const [amount, setAmount] = useState("");
 
+  // Down payment
+  const [downPaymentAmount, setDownPaymentAmount] = useState("");
+  const [packageAmount, setPackageAmount] = useState("");
+
   // Recurring
   const [renewalPrice, setRenewalPrice] = useState("");
   const [billingInterval, setBillingInterval] = useState("30");
@@ -155,6 +159,26 @@ export default function GenerateLinkPage() {
           return;
         }
         body.amount = amt;
+      } else if (paymentType === "down_payment") {
+        const dp = parseFloat(downPaymentAmount);
+        const pkg = parseFloat(packageAmount);
+        if (!dp || dp <= 0) {
+          toast.error("Please enter a valid down payment amount");
+          setGenerating(false);
+          return;
+        }
+        if (!pkg || pkg <= 0) {
+          toast.error("Please enter a valid total package amount");
+          setGenerating(false);
+          return;
+        }
+        if (dp >= pkg) {
+          toast.error("Down payment must be less than the total package amount");
+          setGenerating(false);
+          return;
+        }
+        body.downPaymentAmount = dp;
+        body.packageAmount = pkg;
       } else if (paymentType === "renewal") {
         const price = parseFloat(renewalPrice);
         if (!price || price <= 0) {
@@ -225,6 +249,8 @@ export default function GenerateLinkPage() {
   const handleReset = () => {
     setGeneratedUrl(null);
     setAmount("");
+    setDownPaymentAmount("");
+    setPackageAmount("");
     setRenewalPrice("");
     setTotalAmount("");
     setInitialPrice("");
@@ -326,11 +352,12 @@ export default function GenerateLinkPage() {
         </div>
 
         {/* Payment Type Selector */}
-        <div className="grid grid-cols-3 gap-2 mb-6">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-6">
           {[
             { value: "one_time" as const, label: "One-Time", desc: "Single charge" },
-            { value: "renewal" as const, label: "Recurring", desc: "Ongoing subscription" },
+            { value: "down_payment" as const, label: "Down Payment", desc: "Deposit / partial" },
             { value: "split_pay" as const, label: "Split Payment", desc: "Fixed installments" },
+            { value: "renewal" as const, label: "Recurring", desc: "Ongoing subscription" },
           ].map((type) => (
             <button
               key={type.value}
@@ -360,6 +387,48 @@ export default function GenerateLinkPage() {
               min="0"
               step="0.01"
             />
+          </div>
+        )}
+
+        {/* Down Payment Fields */}
+        {paymentType === "down_payment" && (
+          <div className="space-y-4">
+            <Input
+              label="Down Payment Amount"
+              prefix="$"
+              type="number"
+              placeholder="0.00"
+              value={downPaymentAmount}
+              onChange={(e) => setDownPaymentAmount(e.target.value)}
+              min="0"
+              step="0.01"
+            />
+            <Input
+              label="Total Package Amount"
+              prefix="$"
+              type="number"
+              placeholder="0.00"
+              value={packageAmount}
+              onChange={(e) => setPackageAmount(e.target.value)}
+              min="0"
+              step="0.01"
+            />
+            {parseFloat(downPaymentAmount) > 0 && parseFloat(packageAmount) > 0 && (
+              <div className="p-3 bg-cyber-cyan/5 border border-cyber-cyan/20 rounded-lg space-y-1">
+                <p className="text-sm text-cyber-cyan font-[family-name:var(--font-jetbrains)]">
+                  Customer pays <strong>{formatCurrency(parseFloat(downPaymentAmount))}</strong> now
+                </p>
+                <p className="text-xs text-cyber-muted">
+                  Remaining balance: {formatCurrency(parseFloat(packageAmount) - parseFloat(downPaymentAmount))}
+                </p>
+              </div>
+            )}
+            <div className="flex items-start gap-2 p-3 bg-cyber-purple/5 border border-cyber-purple/20 rounded-lg">
+              <Info className="w-4 h-4 text-cyber-purple flex-shrink-0 mt-0.5" />
+              <p className="text-xs text-cyber-purple">
+                The payment link will only charge the down payment amount. The total package amount is stored for tracking purposes.
+              </p>
+            </div>
           </div>
         )}
 
@@ -558,6 +627,8 @@ export default function GenerateLinkPage() {
             <span className="text-white capitalize">
               {paymentType === "one_time"
                 ? "One-Time Payment"
+                : paymentType === "down_payment"
+                ? "Down Payment"
                 : paymentType === "renewal"
                 ? "Recurring Subscription"
                 : splitMode === "custom"
@@ -570,6 +641,8 @@ export default function GenerateLinkPage() {
             <span className="font-[family-name:var(--font-jetbrains)] text-cyber-cyan">
               {paymentType === "one_time"
                 ? formatCurrency(parseFloat(amount) || 0)
+                : paymentType === "down_payment"
+                ? formatCurrency(parseFloat(downPaymentAmount) || 0)
                 : paymentType === "renewal"
                 ? `${formatCurrency(parseFloat(renewalPrice) || 0)}/period`
                 : splitMode === "equal"
@@ -577,6 +650,14 @@ export default function GenerateLinkPage() {
                 : formatCurrency(getCustomTotal())}
             </span>
           </div>
+          {paymentType === "down_payment" && (
+            <div className="flex justify-between">
+              <span className="text-cyber-muted">Package Total</span>
+              <span className="font-[family-name:var(--font-jetbrains)] text-cyber-muted">
+                {formatCurrency(parseFloat(packageAmount) || 0)}
+              </span>
+            </div>
+          )}
         </div>
 
         <Button

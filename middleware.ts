@@ -4,9 +4,10 @@ import { verifyToken, decodeTokenPayload } from "@/lib/auth";
 const TOKEN_SECRET = process.env.APP_PASSWORD || "fallback-never-use-this";
 
 // Routes that closers are NOT allowed to access
-const ADMIN_ONLY_ROUTES = ["/closers", "/settings"];
+const ADMIN_ONLY_ROUTES = ["/closers", "/down-payments", "/settings"];
 const ADMIN_ONLY_API_PREFIXES = [
   "/api/closers",
+  "/api/down-payments",
   "/api/users",
   "/api/webhooks/register",
   "/api/webhooks/status",
