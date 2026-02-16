@@ -28,6 +28,8 @@ export async function GET(request: NextRequest) {
       });
     }
 
+    products.reverse();
+
     // If not requesting all, filter by enabled products (if any are configured)
     if (!all) {
       const settings = await prisma.appSettings.findUnique({
