@@ -10,6 +10,7 @@ import { TableRowSkeleton } from "@/components/ui/Skeleton";
 import { formatCurrency, formatDateTime, displayProductName } from "@/lib/utils";
 import { Search, X } from "lucide-react";
 import toast from "react-hot-toast";
+import { useUser } from "@/lib/user-context";
 
 interface DownPayment {
   id: string;
@@ -79,6 +80,9 @@ function getDpStatusLabel(status: string | null): string {
 }
 
 export default function DownPaymentsPage() {
+  const currentUser = useUser();
+  const isAdmin = currentUser?.role === "admin";
+
   const [payments, setPayments] = useState<DownPayment[]>([]);
   const [closers, setClosers] = useState<Closer[]>([]);
   const [loading, setLoading] = useState(true);
@@ -107,11 +111,13 @@ export default function DownPaymentsPage() {
 
   useEffect(() => {
     fetchDownPayments();
-    fetch("/api/closers")
-      .then((r) => r.json())
-      .then((d) => {
-        if (d.success) setClosers(d.data);
-      });
+    if (isAdmin) {
+      fetch("/api/closers")
+        .then((r) => r.json())
+        .then((d) => {
+          if (d.success) setClosers(d.data);
+        });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [closerFilter, statusFilter]);
 
@@ -189,14 +195,16 @@ export default function DownPaymentsPage() {
               />
             </div>
           </div>
-          <Select
-            options={[
-              { value: "", label: "All Closers" },
-              ...closers.map((c) => ({ value: c.id, label: c.name })),
-            ]}
-            value={closerFilter}
-            onChange={(e) => setCloserFilter(e.target.value)}
-          />
+          {isAdmin && (
+            <Select
+              options={[
+                { value: "", label: "All Closers" },
+                ...closers.map((c) => ({ value: c.id, label: c.name })),
+              ]}
+              value={closerFilter}
+              onChange={(e) => setCloserFilter(e.target.value)}
+            />
+          )}
           <Select
             options={[
               { value: "", label: "All Statuses" },
@@ -296,26 +304,38 @@ export default function DownPaymentsPage() {
                         {formatCurrency(getRemaining(payment))}
                       </td>
                       <td className="py-3 px-4 text-center" onClick={(e) => e.stopPropagation()}>
-                        <select
-                          value={dpStatus}
-                          onChange={(e) => {
-                            if (payment.paymentLink?.id) {
-                              handleStatusChange(payment.paymentLink.id, e.target.value);
-                            }
-                          }}
-                          disabled={updatingId === payment.paymentLink?.id}
-                          className={`text-xs font-medium rounded-full px-3 py-1 border cursor-pointer focus:outline-none focus:ring-1 transition-all appearance-none text-center ${
+                        {isAdmin ? (
+                          <select
+                            value={dpStatus}
+                            onChange={(e) => {
+                              if (payment.paymentLink?.id) {
+                                handleStatusChange(payment.paymentLink.id, e.target.value);
+                              }
+                            }}
+                            disabled={updatingId === payment.paymentLink?.id}
+                            className={`text-xs font-medium rounded-full px-3 py-1 border cursor-pointer focus:outline-none focus:ring-1 transition-all appearance-none text-center ${
+                              dpStatus === "fully_paid"
+                                ? "bg-cyber-green/15 text-cyber-green border-cyber-green/30 focus:ring-cyber-green/50"
+                                : dpStatus === "cancelled"
+                                ? "bg-cyber-red/15 text-cyber-red border-cyber-red/30 focus:ring-cyber-red/50"
+                                : "bg-cyber-yellow/15 text-cyber-yellow border-cyber-yellow/30 focus:ring-cyber-yellow/50"
+                            } ${updatingId === payment.paymentLink?.id ? "opacity-50" : ""}`}
+                          >
+                            <option value="pending">Pending</option>
+                            <option value="fully_paid">Fully Paid</option>
+                            <option value="cancelled">Cancelled</option>
+                          </select>
+                        ) : (
+                          <span className={`inline-block text-xs font-medium rounded-full px-3 py-1 border ${
                             dpStatus === "fully_paid"
-                              ? "bg-cyber-green/15 text-cyber-green border-cyber-green/30 focus:ring-cyber-green/50"
+                              ? "bg-cyber-green/15 text-cyber-green border-cyber-green/30"
                               : dpStatus === "cancelled"
-                              ? "bg-cyber-red/15 text-cyber-red border-cyber-red/30 focus:ring-cyber-red/50"
-                              : "bg-cyber-yellow/15 text-cyber-yellow border-cyber-yellow/30 focus:ring-cyber-yellow/50"
-                          } ${updatingId === payment.paymentLink?.id ? "opacity-50" : ""}`}
-                        >
-                          <option value="pending">Pending</option>
-                          <option value="fully_paid">Fully Paid</option>
-                          <option value="cancelled">Cancelled</option>
-                        </select>
+                              ? "bg-cyber-red/15 text-cyber-red border-cyber-red/30"
+                              : "bg-cyber-yellow/15 text-cyber-yellow border-cyber-yellow/30"
+                          }`}>
+                            {getDpStatusLabel(dpStatus === "pending" ? null : dpStatus)}
+                          </span>
+                        )}
                       </td>
                     </tr>
                   );

@@ -22,7 +22,7 @@ const allNavItems = [
   { href: "/generate", label: "Generate Link", icon: Zap, adminOnly: false },
   { href: "/links", label: "Payment Links", icon: LinkIcon, adminOnly: false },
   { href: "/payments", label: "Payments", icon: CreditCard, adminOnly: false },
-  { href: "/down-payments", label: "Down Payments", icon: ArrowDownCircle, adminOnly: true },
+  { href: "/down-payments", label: "Down Payments", icon: ArrowDownCircle, adminOnly: false },
   { href: "/settings", label: "Settings", icon: Settings, adminOnly: true },
 ];
 

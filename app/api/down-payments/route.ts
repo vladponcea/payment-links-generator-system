@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getUserFromRequest } from "@/lib/auth";
 
 export async function GET(request: NextRequest) {
   try {
+    const user = getUserFromRequest(request);
     const searchParams = request.nextUrl.searchParams;
     const closerId = searchParams.get("closerId");
     const status = searchParams.get("status");
@@ -18,7 +20,10 @@ export async function GET(request: NextRequest) {
       },
     };
 
-    if (closerId) {
+    // Closers can only see their own down payments
+    if (user?.role === "closer") {
+      where.closerId = user.userId;
+    } else if (closerId) {
       where.closerId = closerId;
     }
     if (status) {
@@ -76,6 +81,14 @@ export async function GET(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
+    const user = getUserFromRequest(request);
+    if (user?.role !== "admin") {
+      return NextResponse.json(
+        { success: false, error: "Admin access required" },
+        { status: 403 }
+      );
+    }
+
     const body = await request.json();
     const { paymentLinkId, downPaymentStatus } = body;
 
