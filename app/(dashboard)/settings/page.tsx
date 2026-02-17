@@ -19,6 +19,7 @@ import {
   UserPlus,
   Users,
   Trash2,
+  Zap,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { formatDateTime } from "@/lib/utils";
@@ -66,6 +67,12 @@ export default function SettingsPage() {
   const [loadingProducts, setLoadingProducts] = useState(true);
   const [savingProducts, setSavingProducts] = useState(false);
   const [productsDirty, setProductsDirty] = useState(false);
+
+  // Zapier webhook state
+  const [zapierWebhookUrl, setZapierWebhookUrl] = useState("");
+  const [loadingZapier, setLoadingZapier] = useState(true);
+  const [savingZapier, setSavingZapier] = useState(false);
+  const [zapierDirty, setZapierDirty] = useState(false);
 
   // User management state
   const [users, setUsers] = useState<UserRecord[]>([]);
@@ -124,11 +131,47 @@ export default function SettingsPage() {
     }
   };
 
+  const fetchZapier = async () => {
+    setLoadingZapier(true);
+    try {
+      const res = await fetch("/api/settings/zapier");
+      const data = await res.json();
+      if (data.success) setZapierWebhookUrl(data.data.zapierWebhookUrl ?? "");
+    } catch (error) {
+      console.error("Failed to fetch Zapier settings:", error);
+    } finally {
+      setLoadingZapier(false);
+    }
+  };
+
   useEffect(() => {
     fetchStatus();
     fetchProducts();
     fetchUsers();
+    fetchZapier();
   }, []);
+
+  const handleSaveZapier = async () => {
+    setSavingZapier(true);
+    try {
+      const res = await fetch("/api/settings/zapier", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ zapierWebhookUrl: zapierWebhookUrl || null }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast.success("Zapier webhook URL saved!");
+        setZapierDirty(false);
+      } else {
+        toast.error(data.error || "Failed to save Zapier webhook URL");
+      }
+    } catch {
+      toast.error("Failed to save Zapier webhook URL");
+    } finally {
+      setSavingZapier(false);
+    }
+  };
 
   const handleRegisterWebhook = async () => {
     setRegistering(true);
@@ -570,6 +613,54 @@ export default function SettingsPage() {
                 {enabledProductIds.length} of {allProducts.length} product{allProducts.length !== 1 ? "s" : ""} enabled
               </div>
             )}
+          </div>
+        )}
+      </Card>
+
+      {/* Zapier (outbound webhook) */}
+      <Card>
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-cyber-yellow/10 rounded-lg">
+              <Zap className="w-5 h-5 text-cyber-yellow" />
+            </div>
+            <div>
+              <h3 className="font-[family-name:var(--font-orbitron)] text-sm font-semibold text-white">
+                Zapier Webhook
+              </h3>
+              <p className="text-xs text-cyber-muted">
+                When a payment succeeds, CloserPay will POST to this URL with client, package, amount, and closer details
+              </p>
+            </div>
+          </div>
+          <Button
+            onClick={handleSaveZapier}
+            loading={savingZapier}
+            disabled={!zapierDirty}
+            size="sm"
+          >
+            <Save className="w-3.5 h-3.5 mr-1.5" />
+            Save
+          </Button>
+        </div>
+
+        {loadingZapier ? (
+          <div className="h-12 animate-shimmer rounded-lg" />
+        ) : (
+          <div className="space-y-2">
+            <Input
+              label="Webhook URL"
+              type="url"
+              placeholder="https://hooks.zapier.com/..."
+              value={zapierWebhookUrl}
+              onChange={(e) => {
+                setZapierWebhookUrl(e.target.value);
+                setZapierDirty(true);
+              }}
+            />
+            <p className="text-xs text-cyber-muted">
+              Paste your Zapier &quot;Catch Hook&quot; URL. Leave empty to disable.
+            </p>
           </div>
         )}
       </Card>

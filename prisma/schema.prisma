@@ -100,14 +100,15 @@ model WebhookEvent {
 }
 
 model AppSettings {
-  id                String   @id @default("default")
-  whopWebhookId     String?  @map("whop_webhook_id")
-  webhookSecret     String?  @map("webhook_secret")
-  webhookUrl        String?  @map("webhook_url")
-  enabledProductIds Json?    @default("[]") @map("enabled_product_ids")
-  registeredAt      DateTime? @map("registered_at")
-  createdAt         DateTime @default(now()) @map("created_at")
-  updatedAt         DateTime @updatedAt @map("updated_at")
+  id                 String    @id @default("default")
+  whopWebhookId      String?   @map("whop_webhook_id")
+  webhookSecret      String?   @map("webhook_secret")
+  webhookUrl         String?   @map("webhook_url")
+  zapierWebhookUrl   String?   @map("zapier_webhook_url")
+  enabledProductIds  Json?     @default("[]") @map("enabled_product_ids")
+  registeredAt       DateTime? @map("registered_at")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
 
   @@map("app_settings")
 }

@@ -155,6 +155,7 @@ export async function POST(request: NextRequest) {
     // Build plan creation params based on payment type
     const internalNotes: Record<string, unknown> = {
       closer_id: closerId,
+      closer_email: closer.email,
       created_via: "closerpay",
     };
 
@@ -192,7 +193,7 @@ export async function POST(request: NextRequest) {
         dbInitialPrice = downPaymentAmount;
         internalNotes.link_type = "down_payment";
         internalNotes.down_payment_amount = downPaymentAmount;
-        internalNotes.package_amount = packageAmount;
+        internalNotes.total_amount = packageAmount;
         break;
       }
       case "renewal": {

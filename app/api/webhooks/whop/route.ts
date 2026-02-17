@@ -240,6 +240,39 @@ async function handlePaymentSucceeded(data: any) {
   console.log(
     `Payment recorded: $${paymentAmount} from ${data.user?.name || "unknown"} via plan ${planId}`
   );
+
+  // Forward to Zapier webhook if configured (fire-and-forget)
+  const settings = await prisma.appSettings.findUnique({
+    where: { id: "default" },
+    select: { zapierWebhookUrl: true },
+  });
+  const zapierUrl = settings?.zapierWebhookUrl?.trim();
+  if (zapierUrl) {
+    const hasTotal =
+      paymentLink.planType === "down_payment" ||
+      paymentLink.planType === "split_pay" ||
+      paymentLink.planType === "custom_split";
+    const payload = {
+      client_name: data.user?.name ?? data.membership?.email ?? null,
+      client_email: data.user?.email ?? data.membership?.email ?? null,
+      package:
+        data.product?.title ||
+        data.product?.name ||
+        paymentLink.productName ||
+        null,
+      amount_collected: paymentAmount,
+      total_to_be_collected: hasTotal ? paymentLink.totalAmount : null,
+      payment_type: paymentLink.planType,
+      closer: closer.email,
+    };
+    fetch(zapierUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }).catch((err) =>
+      console.error("Zapier webhook forward failed:", err)
+    );
+  }
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
