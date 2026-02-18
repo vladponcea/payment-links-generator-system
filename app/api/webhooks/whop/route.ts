@@ -252,6 +252,9 @@ async function handlePaymentSucceeded(data: any) {
       paymentLink.planType === "down_payment" ||
       paymentLink.planType === "split_pay" ||
       paymentLink.planType === "custom_split";
+    const nameParts = (closer.name || "").trim().split(/\s+/);
+    const closerFirstName = nameParts[0] ?? "";
+    const closerLastName = nameParts.slice(1).join(" ") ?? "";
     const payload = {
       client_name: data.user?.name ?? data.membership?.email ?? null,
       client_email: data.user?.email ?? data.membership?.email ?? null,
@@ -263,7 +266,8 @@ async function handlePaymentSucceeded(data: any) {
       amount_collected: paymentAmount,
       total_to_be_collected: hasTotal ? paymentLink.totalAmount : null,
       payment_type: paymentLink.planType,
-      closer: closer.email,
+      closer_first_name: closerFirstName,
+      closer_last_name: closerLastName,
     };
     fetch(zapierUrl, {
       method: "POST",
