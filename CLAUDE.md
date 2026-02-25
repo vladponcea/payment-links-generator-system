@@ -135,6 +135,7 @@ Relations: `paymentLinks[]`, `payments[]`
 | status | String | Default "active" | "active", "expired", "completed" |
 | title | String? | | Optional plan title |
 | description | String? | | |
+| clientName | String? | | Pre-filled client name for Zapier webhook fallback |
 | internalNotes | String? | | JSON string with closer_id, link_type, etc. |
 | downPaymentStatus | String? | | "fully_paid", "cancelled", or null (pending) |
 | createdAt | DateTime | Default now() | |
@@ -483,3 +484,5 @@ return NextResponse.json({ success: true, data, pagination: { page, limit, total
 12. **Down payment aging colors:** The down-payments page colors rows based on age — red for 30+ days old pending, orange for 14+ days, normal otherwise. Fully paid/cancelled rows are always normal color.
 
 13. **No database migrations:** Project uses `prisma db push` instead of migration files. Schema changes are pushed directly. The `prisma.config.ts` references a migrations path but no migration files exist.
+
+14. **Client name fallback chain:** When sending data to Zapier webhook, client name resolves in this order: Whop webhook payload (`data.user.name`) → payment link's `clientName` field (set at link generation) → client email. The `customerName` on the Payment record also falls back to `paymentLink.clientName` when the webhook payload has no name.

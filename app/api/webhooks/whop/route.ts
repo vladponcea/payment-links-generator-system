@@ -218,7 +218,7 @@ async function handlePaymentSucceeded(data: any) {
       productName:
         data.product?.title || data.product?.name || paymentLink.productName,
       customerEmail: data.user?.email || data.membership?.email,
-      customerName: data.user?.name,
+      customerName: data.user?.name || paymentLink.clientName,
       customerId: data.user?.id,
       membershipId: data.membership?.id,
       amount: paymentAmount,
@@ -255,9 +255,10 @@ async function handlePaymentSucceeded(data: any) {
     const nameParts = (closer.name || "").trim().split(/\s+/);
     const closerFirstName = nameParts[0] ?? "";
     const closerLastName = nameParts.slice(1).join(" ") ?? "";
+    const clientEmail = data.user?.email ?? data.membership?.email ?? null;
     const payload = {
-      client_name: data.user?.name ?? data.membership?.name ?? null,
-      client_email: data.user?.email ?? data.membership?.email ?? null,
+      client_name: data.user?.name || data.membership?.name || paymentLink.clientName || clientEmail,
+      client_email: clientEmail,
       package:
         data.product?.title ||
         data.product?.name ||

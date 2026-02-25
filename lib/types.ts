@@ -23,6 +23,7 @@ export interface PaymentLinkFormData {
   paymentType: PaymentType;
   title?: string;
   description?: string;
+  clientName?: string;
 
   // One-time
   amount?: number;

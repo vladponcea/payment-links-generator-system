@@ -49,6 +49,7 @@ export default function GenerateLinkPage() {
   const [paymentType, setPaymentType] = useState<PaymentType>("one_time");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [clientName, setClientName] = useState("");
 
   // One-time
   const [amount, setAmount] = useState("");
@@ -148,6 +149,7 @@ export default function GenerateLinkPage() {
         paymentType,
         title: title || undefined,
         description: description || undefined,
+        clientName: clientName.trim() || undefined,
         billingPeriodDays,
       };
 
@@ -257,6 +259,7 @@ export default function GenerateLinkPage() {
     setRemainingAmount("");
     setTitle("");
     setDescription("");
+    setClientName("");
   };
 
   if (generatedUrl) {
@@ -340,11 +343,33 @@ export default function GenerateLinkPage() {
         )}
       </Card>
 
-      {/* Step 3: Payment Configuration */}
+      {/* Client Name (optional) */}
       <Card>
         <div className="flex items-center gap-2 mb-4">
           <div className="w-6 h-6 rounded-full bg-cyber-cyan/20 flex items-center justify-center text-xs font-bold text-cyber-cyan">
             {isCloserRole ? 2 : 3}
+          </div>
+          <h3 className="font-[family-name:var(--font-orbitron)] text-sm font-semibold text-white">
+            Client Details
+          </h3>
+          <Badge variant="gray">Optional</Badge>
+        </div>
+        <Input
+          label="Client Name"
+          placeholder="Enter client's full name"
+          value={clientName}
+          onChange={(e) => setClientName(e.target.value)}
+        />
+        <p className="text-xs text-cyber-muted mt-1.5">
+          Used as a fallback if the client&apos;s name isn&apos;t available from the payment provider.
+        </p>
+      </Card>
+
+      {/* Payment Configuration */}
+      <Card>
+        <div className="flex items-center gap-2 mb-4">
+          <div className="w-6 h-6 rounded-full bg-cyber-cyan/20 flex items-center justify-center text-xs font-bold text-cyber-cyan">
+            {isCloserRole ? 3 : 4}
           </div>
           <h3 className="font-[family-name:var(--font-orbitron)] text-sm font-semibold text-white">
             Payment Configuration
@@ -601,11 +626,11 @@ export default function GenerateLinkPage() {
 
       </Card>
 
-      {/* Step 4: Review & Generate */}
+      {/* Review & Generate */}
       <Card glow>
         <div className="flex items-center gap-2 mb-4">
           <div className="w-6 h-6 rounded-full bg-cyber-cyan/20 flex items-center justify-center text-xs font-bold text-cyber-cyan">
-            {isCloserRole ? 3 : 4}
+            {isCloserRole ? 4 : 5}
           </div>
           <h3 className="font-[family-name:var(--font-orbitron)] text-sm font-semibold text-white">
             Review & Generate
