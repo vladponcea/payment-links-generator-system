@@ -256,7 +256,7 @@ async function handlePaymentSucceeded(data: any) {
     const closerFirstName = nameParts[0] ?? "";
     const closerLastName = nameParts.slice(1).join(" ") ?? "";
     const payload = {
-      client_name: data.user?.name ?? data.membership?.email ?? null,
+      client_name: data.user?.name ?? data.membership?.name ?? null,
       client_email: data.user?.email ?? data.membership?.email ?? null,
       package:
         data.product?.title ||
