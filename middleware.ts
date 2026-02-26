@@ -10,6 +10,7 @@ const ADMIN_ONLY_API_PREFIXES = [
   "/api/users",
   "/api/webhooks/register",
   "/api/webhooks/status",
+  "/api/webhooks/zapier-retry",
   "/api/settings/zapier",
 ];
 

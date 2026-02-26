@@ -20,6 +20,36 @@ export async function GET() {
       },
     });
 
+    // Zapier delivery log — recent payments with Zapier status
+    const zapierDeliveries = await prisma.payment.findMany({
+      where: {
+        status: "succeeded",
+        zapierStatus: { not: null },
+      },
+      orderBy: { createdAt: "desc" },
+      take: 50,
+      select: {
+        id: true,
+        whopPaymentId: true,
+        customerName: true,
+        customerEmail: true,
+        productName: true,
+        amount: true,
+        zapierStatus: true,
+        zapierError: true,
+        zapierSentAt: true,
+        createdAt: true,
+      },
+    });
+
+    // Count of payments that never had Zapier attempted (legacy/null status)
+    const missingZapierCount = await prisma.payment.count({
+      where: {
+        status: "succeeded",
+        zapierStatus: null,
+      },
+    });
+
     return NextResponse.json({
       success: true,
       data: {
@@ -28,6 +58,8 @@ export async function GET() {
         webhookUrl: settings?.webhookUrl,
         registeredAt: settings?.registeredAt,
         recentEvents,
+        zapierDeliveries,
+        missingZapierCount,
       },
     });
   } catch (error) {

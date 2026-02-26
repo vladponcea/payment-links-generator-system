@@ -113,10 +113,11 @@ export async function POST(request: NextRequest) {
     });
 
     // Process the event
+    let zapierContext: ZapierContext | null = null;
     try {
       switch (eventType) {
         case "payment.succeeded":
-          await handlePaymentSucceeded(eventData);
+          zapierContext = await handlePaymentSucceeded(eventData);
           break;
         case "payment.failed":
           await handlePaymentFailed(eventData);
@@ -132,6 +133,7 @@ export async function POST(request: NextRequest) {
           console.log("Unhandled event type:", eventType);
       }
 
+      // Mark as processed BEFORE Zapier — prevents duplicate processing on Whop retry
       await prisma.webhookEvent.update({
         where: { whopMessageId: messageId },
         data: { processedAt: new Date() },
@@ -142,6 +144,17 @@ export async function POST(request: NextRequest) {
         where: { whopMessageId: messageId },
         data: { error: String(error) },
       });
+    }
+
+    // Send Zapier webhook AFTER marking processed — even if this is slow,
+    // Whop retries will hit the idempotency check above
+    if (zapierContext) {
+      await sendZapierWebhook(
+        zapierContext.data,
+        zapierContext.paymentLink,
+        zapierContext.closer,
+        zapierContext.paymentAmount,
+      );
     }
 
     return NextResponse.json({ status: "ok" });
@@ -173,14 +186,26 @@ function whopAmount(data: Record<string, unknown>): number {
   return 0;
 }
 
+// ── Types ────────────────────────────────────────────────────────────
+
+interface ZapierContext {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  data: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  paymentLink: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  closer: any;
+  paymentAmount: number;
+}
+
 // ── Event handlers ──────────────────────────────────────────────────
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function handlePaymentSucceeded(data: any) {
+async function handlePaymentSucceeded(data: any): Promise<ZapierContext | null> {
   const planId = data.plan?.id;
   if (!planId) {
     console.warn("payment.succeeded: no plan.id in payload");
-    return;
+    return null;
   }
 
   const paymentLink = await prisma.paymentLink.findFirst({
@@ -190,7 +215,7 @@ async function handlePaymentSucceeded(data: any) {
 
   if (!paymentLink) {
     console.warn("payment.succeeded: no payment link found for plan", planId);
-    return;
+    return null;
   }
 
   const closer = paymentLink.closer;
@@ -241,42 +266,99 @@ async function handlePaymentSucceeded(data: any) {
     `Payment recorded: $${paymentAmount} from ${data.user?.name || "unknown"} via plan ${planId}`
   );
 
-  // Forward to Zapier webhook if configured (fire-and-forget)
+  return { data, paymentLink, closer, paymentAmount };
+}
+
+/** Build the Zapier payload for a given payment */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function buildZapierPayload(data: any, paymentLink: any, closer: any, paymentAmount: number) {
+  const hasTotal =
+    paymentLink.planType === "down_payment" ||
+    paymentLink.planType === "split_pay" ||
+    paymentLink.planType === "custom_split";
+  const nameParts = (closer.name || "").trim().split(/\s+/);
+  const closerFirstName = nameParts[0] ?? "";
+  const closerLastName = nameParts.slice(1).join(" ") ?? "";
+  const clientEmail = data.user?.email ?? data.membership?.email ?? null;
+  return {
+    client_name: data.user?.name || data.membership?.name || paymentLink.clientName || clientEmail,
+    client_email: clientEmail,
+    package:
+      data.product?.title ||
+      data.product?.name ||
+      paymentLink.productName ||
+      null,
+    amount_collected: paymentAmount,
+    total_to_be_collected: hasTotal ? paymentLink.totalAmount : null,
+    payment_type: paymentLink.planType,
+    closer_first_name: closerFirstName,
+    closer_last_name: closerLastName,
+  };
+}
+
+/** Send Zapier webhook with retry, await completion, and track result on Payment */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function sendZapierWebhook(data: any, paymentLink: any, closer: any, paymentAmount: number) {
   const settings = await prisma.appSettings.findUnique({
     where: { id: "default" },
     select: { zapierWebhookUrl: true },
   });
   const zapierUrl = settings?.zapierWebhookUrl?.trim();
-  if (zapierUrl) {
-    const hasTotal =
-      paymentLink.planType === "down_payment" ||
-      paymentLink.planType === "split_pay" ||
-      paymentLink.planType === "custom_split";
-    const nameParts = (closer.name || "").trim().split(/\s+/);
-    const closerFirstName = nameParts[0] ?? "";
-    const closerLastName = nameParts.slice(1).join(" ") ?? "";
-    const clientEmail = data.user?.email ?? data.membership?.email ?? null;
-    const payload = {
-      client_name: data.user?.name || data.membership?.name || paymentLink.clientName || clientEmail,
-      client_email: clientEmail,
-      package:
-        data.product?.title ||
-        data.product?.name ||
-        paymentLink.productName ||
-        null,
-      amount_collected: paymentAmount,
-      total_to_be_collected: hasTotal ? paymentLink.totalAmount : null,
-      payment_type: paymentLink.planType,
-      closer_first_name: closerFirstName,
-      closer_last_name: closerLastName,
-    };
-    fetch(zapierUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    }).catch((err) =>
-      console.error("Zapier webhook forward failed:", err)
-    );
+
+  if (!zapierUrl) {
+    await prisma.payment.updateMany({
+      where: { whopPaymentId: data.id },
+      data: { zapierStatus: "skipped", zapierError: "No Zapier webhook URL configured" },
+    });
+    return;
+  }
+
+  const payload = buildZapierPayload(data, paymentLink, closer, paymentAmount);
+  const MAX_ATTEMPTS = 2;
+
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000); // 5s timeout
+    try {
+      const res = await fetch(zapierUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      });
+
+      if (res.ok) {
+        await prisma.payment.updateMany({
+          where: { whopPaymentId: data.id },
+          data: { zapierStatus: "sent", zapierSentAt: new Date(), zapierError: null },
+        });
+        console.log(`Zapier webhook sent for payment ${data.id}`);
+        return;
+      }
+
+      const errText = await res.text().catch(() => "");
+      const errMsg = `HTTP ${res.status}: ${errText}`.slice(0, 500);
+
+      if (attempt === MAX_ATTEMPTS) {
+        await prisma.payment.updateMany({
+          where: { whopPaymentId: data.id },
+          data: { zapierStatus: "failed", zapierError: errMsg },
+        });
+        console.error(`Zapier webhook failed for payment ${data.id}: ${errMsg}`);
+      }
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+
+      if (attempt === MAX_ATTEMPTS) {
+        await prisma.payment.updateMany({
+          where: { whopPaymentId: data.id },
+          data: { zapierStatus: "failed", zapierError: errMsg.slice(0, 500) },
+        });
+        console.error(`Zapier webhook failed for payment ${data.id}: ${errMsg}`);
+      }
+    } finally {
+      clearTimeout(timeout);
+    }
   }
 }
 

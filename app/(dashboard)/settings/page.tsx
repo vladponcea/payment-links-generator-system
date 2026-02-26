@@ -20,9 +20,25 @@ import {
   Users,
   Trash2,
   Zap,
+  AlertTriangle,
+  RotateCcw,
+  Send,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { formatDateTime } from "@/lib/utils";
+
+interface ZapierDelivery {
+  id: string;
+  whopPaymentId: string;
+  customerName: string | null;
+  customerEmail: string | null;
+  productName: string | null;
+  amount: number;
+  zapierStatus: string | null;
+  zapierError: string | null;
+  zapierSentAt: string | null;
+  createdAt: string;
+}
 
 interface WebhookStatus {
   isRegistered: boolean;
@@ -37,6 +53,8 @@ interface WebhookStatus {
     error: string | null;
     createdAt: string;
   }>;
+  zapierDeliveries: ZapierDelivery[];
+  missingZapierCount: number;
 }
 
 interface WhopProduct {
@@ -77,6 +95,7 @@ export default function SettingsPage() {
   // User management state
   const [users, setUsers] = useState<UserRecord[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(true);
+  const [retryingId, setRetryingId] = useState<string | null>(null);
   const [showAddUser, setShowAddUser] = useState(false);
   const [addingUser, setAddingUser] = useState(false);
   const [newUser, setNewUser] = useState({
@@ -170,6 +189,28 @@ export default function SettingsPage() {
       toast.error("Failed to save Zapier webhook URL");
     } finally {
       setSavingZapier(false);
+    }
+  };
+
+  const handleRetryZapier = async (paymentId: string) => {
+    setRetryingId(paymentId);
+    try {
+      const res = await fetch("/api/webhooks/zapier-retry", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ paymentId }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast.success("Zapier webhook sent successfully!");
+        fetchStatus();
+      } else {
+        toast.error(data.error || "Failed to retry Zapier webhook");
+      }
+    } catch {
+      toast.error("Failed to retry Zapier webhook");
+    } finally {
+      setRetryingId(null);
     }
   };
 
@@ -661,6 +702,134 @@ export default function SettingsPage() {
             <p className="text-xs text-cyber-muted">
               Paste your Zapier &quot;Catch Hook&quot; URL. Leave empty to disable.
             </p>
+          </div>
+        )}
+      </Card>
+
+      {/* Zapier Delivery Log */}
+      <Card>
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-cyber-yellow/10 rounded-lg">
+              <Send className="w-5 h-5 text-cyber-yellow" />
+            </div>
+            <div>
+              <h3 className="font-[family-name:var(--font-orbitron)] text-sm font-semibold text-white">
+                Zapier Delivery Log
+              </h3>
+              <p className="text-xs text-cyber-muted">
+                Track every Zapier webhook delivery — retry failed ones
+              </p>
+            </div>
+          </div>
+          <Button variant="ghost" size="sm" onClick={fetchStatus}>
+            <RefreshCw className="w-3.5 h-3.5 mr-1" /> Refresh
+          </Button>
+        </div>
+
+        {webhookStatus?.missingZapierCount != null && webhookStatus.missingZapierCount > 0 && (
+          <div className="flex items-center gap-2 text-cyber-yellow text-xs p-3 bg-cyber-yellow/5 border border-cyber-yellow/20 rounded-lg mb-4">
+            <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+            <span>
+              {webhookStatus.missingZapierCount} older payment{webhookStatus.missingZapierCount !== 1 ? "s" : ""} have
+              no Zapier delivery status (before tracking was added).
+            </span>
+          </div>
+        )}
+
+        {webhookStatus?.zapierDeliveries && webhookStatus.zapierDeliveries.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-cyber-border">
+                  <th className="text-left py-2 px-3 text-xs text-cyber-muted uppercase tracking-wider font-medium">
+                    Time
+                  </th>
+                  <th className="text-left py-2 px-3 text-xs text-cyber-muted uppercase tracking-wider font-medium">
+                    Customer
+                  </th>
+                  <th className="text-left py-2 px-3 text-xs text-cyber-muted uppercase tracking-wider font-medium">
+                    Product
+                  </th>
+                  <th className="text-right py-2 px-3 text-xs text-cyber-muted uppercase tracking-wider font-medium">
+                    Amount
+                  </th>
+                  <th className="text-center py-2 px-3 text-xs text-cyber-muted uppercase tracking-wider font-medium">
+                    Status
+                  </th>
+                  <th className="text-left py-2 px-3 text-xs text-cyber-muted uppercase tracking-wider font-medium">
+                    Error
+                  </th>
+                  <th className="text-center py-2 px-3 text-xs text-cyber-muted uppercase tracking-wider font-medium">
+                    Action
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {webhookStatus.zapierDeliveries.map((d, i) => (
+                  <tr
+                    key={d.id}
+                    className={`border-b border-cyber-border/50 ${
+                      i % 2 === 0 ? "bg-cyber-dark" : "bg-cyber-black"
+                    }`}
+                  >
+                    <td className="py-2 px-3 text-xs text-cyber-muted font-[family-name:var(--font-jetbrains)]">
+                      {formatDateTime(d.createdAt)}
+                    </td>
+                    <td className="py-2 px-3 text-xs text-cyber-text">
+                      {d.customerName || d.customerEmail || "Unknown"}
+                    </td>
+                    <td className="py-2 px-3 text-xs text-cyber-muted truncate max-w-[140px]">
+                      {d.productName || "—"}
+                    </td>
+                    <td className="py-2 px-3 text-xs text-cyber-text text-right font-[family-name:var(--font-jetbrains)]">
+                      ${d.amount.toFixed(2)}
+                    </td>
+                    <td className="py-2 px-3 text-center">
+                      {d.zapierStatus === "sent" ? (
+                        <Badge variant="green">
+                          <CheckCircle className="w-3 h-3 mr-1" /> Sent
+                        </Badge>
+                      ) : d.zapierStatus === "failed" ? (
+                        <Badge variant="red">
+                          <XCircle className="w-3 h-3 mr-1" /> Failed
+                        </Badge>
+                      ) : d.zapierStatus === "skipped" ? (
+                        <Badge variant="yellow">Skipped</Badge>
+                      ) : (
+                        <Badge variant="yellow">Unknown</Badge>
+                      )}
+                    </td>
+                    <td className="py-2 px-3 text-xs text-cyber-red max-w-[200px] truncate" title={d.zapierError || ""}>
+                      {d.zapierError || "—"}
+                    </td>
+                    <td className="py-2 px-3 text-center">
+                      {(d.zapierStatus === "failed" || d.zapierStatus === "skipped") && (
+                        <button
+                          onClick={() => handleRetryZapier(d.id)}
+                          disabled={retryingId === d.id}
+                          className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded border border-cyber-cyan/30 text-cyber-cyan hover:bg-cyber-cyan/10 transition-colors disabled:opacity-50"
+                          title="Retry Zapier webhook"
+                        >
+                          <RotateCcw className={`w-3 h-3 ${retryingId === d.id ? "animate-spin" : ""}`} />
+                          Retry
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : loading ? (
+          <div className="space-y-3">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="h-10 animate-shimmer rounded-lg" />
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-8 text-cyber-muted text-sm">
+            No Zapier deliveries recorded yet. New payments will show delivery status here.
           </div>
         )}
       </Card>

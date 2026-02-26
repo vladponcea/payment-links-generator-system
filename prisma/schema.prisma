@@ -79,6 +79,9 @@ model Payment {
   isRecurring       Boolean   @default(false) @map("is_recurring")
   commissionAmount  Float?    @map("commission_amount")
   whopWebhookData   Json?     @map("whop_webhook_data")
+  zapierStatus      String?   @map("zapier_status")   // "sent", "failed", "skipped"
+  zapierError       String?   @map("zapier_error")
+  zapierSentAt      DateTime? @map("zapier_sent_at")
   createdAt         DateTime  @default(now()) @map("created_at")
   updatedAt         DateTime  @updatedAt @map("updated_at")
 
