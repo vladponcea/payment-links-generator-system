@@ -8,6 +8,7 @@ A full-stack Next.js application for generating custom Whop checkout links and t
 - **Closer Attribution** — Every payment is automatically attributed to the correct closer
 - **Real-time Analytics** — Revenue charts, closer leaderboards, and product breakdowns
 - **Webhook Processing** — Automatic payment tracking via Whop webhooks with idempotency
+- **Zapier Integration** — Outbound webhook on payment success with delivery tracking and retry
 - **Commission Tracking** — Per-closer commission calculations (percentage or flat rate)
 - **CSV Export** — Export payment data for reporting
 
