@@ -14,6 +14,8 @@ const ADMIN_ONLY_API_PREFIXES = [
   "/api/settings/zapier",
 ];
 
+const DEMO_MODE = process.env.DEMO_MODE === "true";
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
@@ -26,6 +28,23 @@ export async function middleware(request: NextRequest) {
     pathname === "/api/webhooks/whop"
   ) {
     return NextResponse.next();
+  }
+
+  // Demo mode: skip auth entirely, auto-inject admin user
+  if (DEMO_MODE) {
+    if (pathname === "/login") {
+      return NextResponse.redirect(new URL("/", request.url));
+    }
+
+    const requestHeaders = new Headers(request.headers);
+    requestHeaders.set("x-user-id", "user_admin_1");
+    requestHeaders.set("x-user-role", "admin");
+    requestHeaders.set("x-user-email", "demo@closerpay.com");
+    requestHeaders.set("x-user-name", "Demo Admin");
+
+    return NextResponse.next({
+      request: { headers: requestHeaders },
+    });
   }
 
   // Check for valid auth token AND valid payload format
