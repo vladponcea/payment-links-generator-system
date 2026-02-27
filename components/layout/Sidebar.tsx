@@ -12,10 +12,19 @@ import {
   ChevronLeft,
   ChevronRight,
   LogOut,
+  Users,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { useUser } from "@/lib/user-context";
+
+const DEMO_MODE = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
+
+const DEMO_USERS = [
+  { key: "admin", label: "Demo Admin", sublabel: "Admin", icon: "DA" },
+  { key: "closer_1", label: "Alex Rivera", sublabel: "Closer · 15%", icon: "AR" },
+  { key: "closer_2", label: "Jordan Chen", sublabel: "Closer · $50 flat", icon: "JC" },
+];
 
 const allNavItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard, adminOnly: false },
@@ -106,8 +115,56 @@ export function Sidebar() {
         })}
       </nav>
 
-      {/* User info + Logout */}
-      {user && !collapsed && (
+      {/* Demo role switcher */}
+      {DEMO_MODE && !collapsed && (
+        <div className="px-3 py-3 border-t border-cyber-border">
+          <div className="flex items-center gap-2 px-1 mb-2">
+            <Users className="w-3.5 h-3.5 text-cyber-cyan" />
+            <span className="text-xs font-medium text-cyber-cyan uppercase tracking-wider">Switch View</span>
+          </div>
+          <div className="space-y-1">
+            {DEMO_USERS.map((du) => {
+              const isActive = user?.name === du.label;
+              return (
+                <button
+                  key={du.key}
+                  onClick={() => {
+                    document.cookie = `demo_user=${du.key};path=/;max-age=86400`;
+                    window.location.href = "/";
+                  }}
+                  className={cn(
+                    "flex items-center gap-2.5 w-full px-2.5 py-2 rounded-lg transition-all text-left",
+                    isActive
+                      ? "bg-cyber-cyan/10 text-cyber-cyan"
+                      : "text-cyber-muted hover:text-cyber-text hover:bg-white/5"
+                  )}
+                >
+                  <div className={cn(
+                    "w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0",
+                    isActive ? "bg-cyber-cyan/20 text-cyber-cyan" : "bg-white/10 text-cyber-muted"
+                  )}>
+                    {du.icon}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{du.label}</p>
+                    <p className="text-[10px] text-cyber-muted">{du.sublabel}</p>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+      {DEMO_MODE && collapsed && (
+        <div className="px-2 py-3 border-t border-cyber-border">
+          <div className="w-8 h-8 rounded-full bg-cyber-cyan/20 flex items-center justify-center text-xs font-bold text-cyber-cyan mx-auto" title={user?.name}>
+            {user?.name?.charAt(0).toUpperCase()}
+          </div>
+        </div>
+      )}
+
+      {/* User info + Logout (non-demo) */}
+      {!DEMO_MODE && user && !collapsed && (
         <div className="px-3 py-3 border-t border-cyber-border">
           <div className="flex items-center gap-3 mb-2 px-1">
             <div className="w-8 h-8 rounded-full bg-cyber-cyan/20 flex items-center justify-center text-xs font-bold text-cyber-cyan flex-shrink-0">
@@ -127,7 +184,7 @@ export function Sidebar() {
           </button>
         </div>
       )}
-      {user && collapsed && (
+      {!DEMO_MODE && user && collapsed && (
         <div className="px-2 py-3 border-t border-cyber-border">
           <button
             onClick={handleLogout}
