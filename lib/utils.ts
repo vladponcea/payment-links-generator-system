@@ -95,10 +95,10 @@ export function getBillingIntervalLabel(days: number): string {
 
 // Product display names with emoji prefixes
 const PRODUCT_EMOJI_MAP: Record<string, string> = {
-  "CareerGrowth Guided": "🤝",
-  "CareerGrowth Advanced": "🚀",
-  "CareerGrowth VIP": "🎓",
-  "CareerGrowth VTO": "🎥",
+  "CloserPay Guided": "🤝",
+  "CloserPay Advanced": "🚀",
+  "CloserPay VIP": "🎓",
+  "CloserPay VTO": "🎥",
 };
 
 export function displayProductName(name: string | null | undefined): string {

@@ -57,7 +57,7 @@ export function Sidebar() {
               <Zap className="w-5 h-5 text-cyber-cyan" />
             </div>
             <span className="font-[family-name:var(--font-orbitron)] text-lg font-bold text-white tracking-wider">
-              Career<span className="text-cyber-cyan">Growth</span>
+              Closer<span className="text-cyber-cyan">Pay</span>
             </span>
           </Link>
         )}

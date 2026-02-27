@@ -14,7 +14,7 @@ const pageTitles: Record<string, string> = {
 
 export function TopBar() {
   const pathname = usePathname();
-  const title = pageTitles[pathname] || "CareerGrowth";
+  const title = pageTitles[pathname] || "CloserPay";
 
   return (
     <header className="h-16 bg-cyber-dark border-b border-cyber-border flex items-center px-6">

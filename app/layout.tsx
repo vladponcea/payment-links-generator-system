@@ -19,7 +19,7 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "CareerGrowth — Payment Link Generator & Sales Analytics",
+  title: "CloserPay — Payment Link Generator & Sales Analytics",
   description:
     "Generate custom Whop checkout links and track sales performance in real-time.",
 };

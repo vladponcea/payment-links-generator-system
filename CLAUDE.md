@@ -2,7 +2,7 @@
 
 ## 1. Project Overview
 
-Internal sales operations tool for CareerGrowth. Generates custom Whop checkout links (one-time, recurring, split-pay, down payment), attributes every payment to a closer, and tracks revenue/commissions in real-time via webhooks. Built for high-ticket sales teams using Whop as their payment processor.
+Internal sales operations tool for CloserPay. Generates custom Whop checkout links (one-time, recurring, split-pay, down payment), attributes every payment to a closer, and tracks revenue/commissions in real-time via webhooks. Built for high-ticket sales teams using Whop as their payment processor.
 
 - **Language:** TypeScript
 - **Framework:** Next.js 16.1.6 (App Router, React 19.2.3)

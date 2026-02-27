@@ -108,7 +108,7 @@ export default function LoginPage() {
             <Zap className="w-6 h-6 text-cyber-cyan" />
           </div>
           <span className="font-[family-name:var(--font-orbitron)] text-2xl font-bold text-white tracking-wider">
-            Career<span className="text-cyber-cyan">Growth</span>
+            Closer<span className="text-cyber-cyan">Pay</span>
           </span>
         </div>
 
