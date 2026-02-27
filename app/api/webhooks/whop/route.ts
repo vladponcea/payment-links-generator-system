@@ -85,11 +85,14 @@ export async function POST(request: NextRequest) {
 
     console.log("Webhook event:", eventType, "| Payment ID:", eventData.id);
 
-    // Use the payment/resource ID for idempotency
-    const messageId =
+    // Use event type + payment/resource ID for idempotency.
+    // This ensures a payment.succeeded is still processed even if
+    // payment.failed was already recorded for the same payment ID.
+    const resourceId =
       eventData.id ||
       payload.id ||
       `wh_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+    const messageId = `${eventType}:${resourceId}`;
 
     // Check if already processed
     const existingEvent = await prisma.webhookEvent.findUnique({
